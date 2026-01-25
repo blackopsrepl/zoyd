@@ -170,6 +170,74 @@ def run(
     sys.exit(exit_code)
 
 
+PRD_TEMPLATE = """\
+# Project: {project_name}
+
+Brief description of your project and what you want to accomplish.
+
+## Tasks
+
+- [ ] First task to complete
+- [ ] Second task to complete
+- [ ] Third task to complete
+
+## Notes
+
+Each task should be:
+- Specific and completable in one iteration
+- Marked with `[ ]` when incomplete
+- Marked with `[x]` when complete
+
+Zoyd will work through tasks sequentially until all are complete.
+
+## Success Criteria
+
+- All checkboxes marked `[x]`
+- Tests pass
+- Code works as expected
+"""
+
+
+@cli.command()
+@click.option(
+    "--output",
+    "-o",
+    "output_path",
+    default="PRD.md",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Output path for the PRD file (default: PRD.md)",
+)
+@click.option(
+    "--force",
+    "-f",
+    is_flag=True,
+    help="Overwrite existing file",
+)
+@click.argument("project_name", default="My Project")
+def init(output_path: Path, force: bool, project_name: str):
+    """Create a starter PRD.md template.
+
+    Creates a new PRD file with a basic structure including tasks,
+    notes, and success criteria sections.
+
+    Examples:
+
+        zoyd init "My Awesome Project"
+
+        zoyd init --output docs/tasks.md "Feature Work"
+    """
+    if output_path.exists() and not force:
+        click.echo(f"Error: '{output_path}' already exists. Use --force to overwrite.", err=True)
+        sys.exit(1)
+
+    content = PRD_TEMPLATE.format(project_name=project_name)
+    output_path.write_text(content)
+    click.echo(f"Created {output_path}")
+    click.echo(f"\nNext steps:")
+    click.echo(f"  1. Edit {output_path} to add your tasks")
+    click.echo(f"  2. Run: zoyd run --prd {output_path}")
+
+
 @cli.command()
 @click.option(
     "--prd",

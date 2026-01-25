@@ -1014,3 +1014,95 @@ class TestSummaryStatistics:
 
         captured = capsys.readouterr()
         assert "Success rate: N/A (no iterations run)" in captured.out
+
+
+class TestInitCommand:
+    """Tests for zoyd init command."""
+
+    def test_init_help(self):
+        """Test that init command appears in CLI help."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--help"])
+        assert result.exit_code == 0
+        assert "init" in result.output
+
+    def test_init_creates_prd_file(self, tmp_path):
+        """Test that init creates a PRD.md file with default name."""
+        runner = CliRunner()
+        prd_file = tmp_path / "PRD.md"
+
+        result = runner.invoke(cli, ["init", "--output", str(prd_file), "Test Project"])
+        assert result.exit_code == 0
+        assert "Created" in result.output
+        assert "Next steps:" in result.output
+
+        assert prd_file.exists()
+        content = prd_file.read_text()
+        assert "# Project: Test Project" in content
+        assert "## Tasks" in content
+        assert "- [ ]" in content
+        assert "## Notes" in content
+        assert "## Success Criteria" in content
+
+    def test_init_custom_output_path(self, tmp_path):
+        """Test that init can write to a custom path."""
+        runner = CliRunner()
+        output_path = tmp_path / "docs" / "tasks.md"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        result = runner.invoke(cli, ["init", "--output", str(output_path), "My Feature"])
+        assert result.exit_code == 0
+        assert str(output_path) in result.output
+
+        assert output_path.exists()
+        content = output_path.read_text()
+        assert "# Project: My Feature" in content
+
+    def test_init_refuses_to_overwrite(self, tmp_path):
+        """Test that init refuses to overwrite existing file."""
+        runner = CliRunner()
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# Existing PRD")
+
+        result = runner.invoke(cli, ["init", "--output", str(prd_file), "New Project"])
+        assert result.exit_code == 1
+        assert "already exists" in result.output
+        assert "--force" in result.output
+
+        # Original content should be unchanged
+        assert prd_file.read_text() == "# Existing PRD"
+
+    def test_init_force_overwrites(self, tmp_path):
+        """Test that init --force overwrites existing file."""
+        runner = CliRunner()
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# Existing PRD")
+
+        result = runner.invoke(cli, ["init", "--force", "--output", str(prd_file), "New Project"])
+        assert result.exit_code == 0
+        assert "Created" in result.output
+
+        content = prd_file.read_text()
+        assert "# Project: New Project" in content
+
+    def test_init_default_project_name(self, tmp_path):
+        """Test that init uses default project name."""
+        runner = CliRunner()
+        prd_file = tmp_path / "PRD.md"
+
+        result = runner.invoke(cli, ["init", "--output", str(prd_file)])
+        assert result.exit_code == 0
+
+        content = prd_file.read_text()
+        assert "# Project: My Project" in content
+
+    def test_init_command_help(self):
+        """Test that init --help shows proper documentation."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["init", "--help"])
+        assert result.exit_code == 0
+        assert "--output" in result.output
+        assert "-o" in result.output
+        assert "--force" in result.output
+        assert "-f" in result.output
+        assert "starter PRD.md template" in result.output
