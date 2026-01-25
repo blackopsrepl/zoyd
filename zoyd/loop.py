@@ -12,6 +12,7 @@ from pathlib import Path
 
 from . import prd, progress
 from .session.logger import SessionLogger
+from .session.storage import create_storage
 from .tui.console import create_console
 from .tui.events import EventEmitter, EventType
 from .tui.live import (
@@ -311,6 +312,11 @@ class LoopRunner:
         tui_compact: bool = False,
         session_logging: bool = False,
         sessions_dir: str = ".zoyd/sessions",
+        storage_backend: str = "file",
+        redis_host: str = "localhost",
+        redis_port: int = 6379,
+        redis_db: int = 0,
+        redis_password: str | None = None,
     ):
         self.prd_path = prd_path.resolve()
         self.progress_path = progress_path.resolve()
@@ -328,6 +334,11 @@ class LoopRunner:
         self.tui_compact = tui_compact
         self.session_logging = session_logging
         self.sessions_dir = sessions_dir
+        self.storage_backend = storage_backend
+        self.redis_host = redis_host
+        self.redis_port = redis_port
+        self.redis_db = redis_db
+        self.redis_password = redis_password
         # Create display for output (TUI or plain depending on settings)
         if not tui_enabled:
             self.live: LiveDisplay | PlainDisplay = create_plain_display(
@@ -365,7 +376,15 @@ class LoopRunner:
         # Session logger for persistent logging
         self.session_logger: SessionLogger | None = None
         if self.session_logging:
-            self.session_logger = SessionLogger(sessions_dir=self.sessions_dir)
+            storage = create_storage(
+                backend=self.storage_backend,
+                sessions_dir=self.sessions_dir,
+                redis_host=self.redis_host,
+                redis_port=self.redis_port,
+                redis_db=self.redis_db,
+                redis_password=self.redis_password,
+            )
+            self.session_logger = SessionLogger(storage=storage)
             self.session_logger.subscribe_to(self.events)
 
     def get_backoff_delay(self) -> float:

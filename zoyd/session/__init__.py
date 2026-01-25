@@ -41,8 +41,10 @@ from zoyd.session.models import (
 from zoyd.session.storage import (
     FileStorage,
     InMemoryStorage,
+    RedisStorage,
     SessionStorage,
     append_jsonl,
+    create_storage,
     from_json,
     read_json,
     read_jsonl,
@@ -58,6 +60,8 @@ __all__ = [
     "SessionStorage",
     "InMemoryStorage",
     "FileStorage",
+    "RedisStorage",
+    "create_storage",
     # Models
     "SessionMetadata",
     "SessionEvent",

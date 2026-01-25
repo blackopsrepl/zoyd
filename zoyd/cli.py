@@ -108,6 +108,34 @@ def cli():
     type=click.Path(path_type=Path),
     help="Directory for session logs (default: .zoyd/sessions)",
 )
+@click.option(
+    "--storage-backend",
+    default=None,
+    type=click.Choice(["file", "redis"]),
+    help="Storage backend for session logs: 'file' or 'redis' (default: file)",
+)
+@click.option(
+    "--redis-host",
+    default=None,
+    help="Redis server hostname (default: localhost)",
+)
+@click.option(
+    "--redis-port",
+    default=None,
+    type=int,
+    help="Redis server port (default: 6379)",
+)
+@click.option(
+    "--redis-db",
+    default=None,
+    type=int,
+    help="Redis database number (default: 0)",
+)
+@click.option(
+    "--redis-password",
+    default=None,
+    help="Redis password (default: none)",
+)
 @click.pass_context
 def run(
     ctx: click.Context,
@@ -125,6 +153,11 @@ def run(
     no_tui: bool | None,
     session_log: bool | None,
     sessions_dir: Path | None,
+    storage_backend: str | None,
+    redis_host: str | None,
+    redis_port: int | None,
+    redis_db: int | None,
+    redis_password: str | None,
 ):
     """Run the Zoyd loop against a PRD file.
 
@@ -173,6 +206,18 @@ def run(
     if sessions_dir is None:
         sessions_dir = Path(config.sessions_dir)
 
+    # Apply Redis storage config defaults
+    if storage_backend is None:
+        storage_backend = config.storage_backend
+    if redis_host is None:
+        redis_host = config.redis_host
+    if redis_port is None:
+        redis_port = config.redis_port
+    if redis_db is None:
+        redis_db = config.redis_db
+    if redis_password is None:
+        redis_password = config.redis_password
+
     # Handle resume mode validation
     if resume and not progress_path.exists():
         click.echo(f"Error: Cannot resume - progress file '{progress_path}' does not exist", err=True)
@@ -195,6 +240,11 @@ def run(
         tui_compact=tui_compact,
         session_logging=session_log,
         sessions_dir=str(sessions_dir),
+        storage_backend=storage_backend,
+        redis_host=redis_host,
+        redis_port=redis_port,
+        redis_db=redis_db,
+        redis_password=redis_password,
     )
 
     exit_code = runner.run()
