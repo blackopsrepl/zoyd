@@ -7,6 +7,7 @@ from pathlib import Path
 import click
 
 from . import __version__, prd, progress
+from .config import load_config
 from .loop import LoopRunner
 
 
@@ -21,23 +22,23 @@ def cli():
 @click.option(
     "--prd",
     "prd_path",
-    default="PRD.md",
+    default=None,
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    help="Path to PRD file (default: PRD.md)",
+    help="Path to PRD file (default: PRD.md or from zoyd.toml)",
 )
 @click.option(
     "--progress",
     "progress_path",
-    default="progress.txt",
+    default=None,
     type=click.Path(dir_okay=False, path_type=Path),
-    help="Path to progress file (default: progress.txt)",
+    help="Path to progress file (default: progress.txt or from zoyd.toml)",
 )
 @click.option(
     "-n",
     "--max-iterations",
-    default=10,
+    default=None,
     type=int,
-    help="Maximum iterations to run (default: 10)",
+    help="Maximum iterations to run (default: 10 or from zoyd.toml)",
 )
 @click.option(
     "--model",
@@ -52,18 +53,19 @@ def cli():
 @click.option(
     "-v",
     "--verbose",
+    default=None,
     is_flag=True,
     help="Enable verbose output",
 )
 @click.option(
     "--delay",
-    default=1.0,
+    default=None,
     type=float,
-    help="Seconds to pause between iterations (default: 1.0)",
+    help="Seconds to pause between iterations (default: 1.0 or from zoyd.toml)",
 )
 @click.option(
     "--auto-commit/--no-auto-commit",
-    default=True,
+    default=None,
     help="Automatically commit changes after each completed task (default: enabled)",
 )
 @click.option(
@@ -73,26 +75,55 @@ def cli():
 )
 @click.option(
     "--fail-fast",
+    default=None,
     is_flag=True,
     help="Exit immediately on first failure instead of retrying",
 )
+@click.pass_context
 def run(
-    prd_path: Path,
-    progress_path: Path,
-    max_iterations: int,
+    ctx: click.Context,
+    prd_path: Path | None,
+    progress_path: Path | None,
+    max_iterations: int | None,
     model: str | None,
     dry_run: bool,
-    verbose: bool,
-    delay: float,
-    auto_commit: bool,
+    verbose: bool | None,
+    delay: float | None,
+    auto_commit: bool | None,
     resume: bool,
-    fail_fast: bool,
+    fail_fast: bool | None,
 ):
     """Run the Zoyd loop against a PRD file.
 
     Zoyd invokes Claude Code repeatedly to complete tasks defined in the PRD.
     Changes are made directly in the current directory with sandbox isolation.
+
+    Options can be set in zoyd.toml config file. CLI options override config values.
     """
+    # Load config file and apply defaults
+    config = load_config()
+
+    # Apply config defaults where CLI options weren't provided
+    if prd_path is None:
+        prd_path = Path(config.prd)
+        if not prd_path.exists():
+            click.echo(f"Error: PRD file '{prd_path}' does not exist", err=True)
+            sys.exit(1)
+    if progress_path is None:
+        progress_path = Path(config.progress)
+    if max_iterations is None:
+        max_iterations = config.max_iterations
+    if model is None:
+        model = config.model
+    if delay is None:
+        delay = config.delay
+    if auto_commit is None:
+        auto_commit = config.auto_commit
+    if verbose is None:
+        verbose = config.verbose
+    if fail_fast is None:
+        fail_fast = config.fail_fast
+
     click.echo(f"Zoyd v{__version__}")
     click.echo(f"PRD: {prd_path}")
     click.echo(f"Progress: {progress_path}")
@@ -143,16 +174,16 @@ def run(
 @click.option(
     "--prd",
     "prd_path",
-    default="PRD.md",
+    default=None,
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    help="Path to PRD file (default: PRD.md)",
+    help="Path to PRD file (default: PRD.md or from zoyd.toml)",
 )
 @click.option(
     "--progress",
     "progress_path",
-    default="progress.txt",
+    default=None,
     type=click.Path(dir_okay=False, path_type=Path),
-    help="Path to progress file (default: progress.txt)",
+    help="Path to progress file (default: progress.txt or from zoyd.toml)",
 )
 @click.option(
     "--json",
@@ -160,8 +191,22 @@ def run(
     is_flag=True,
     help="Output status in JSON format for machine-readable output",
 )
-def status(prd_path: Path, progress_path: Path, json_output: bool):
-    """Show PRD completion status."""
+def status(prd_path: Path | None, progress_path: Path | None, json_output: bool):
+    """Show PRD completion status.
+
+    Options can be set in zoyd.toml config file. CLI options override config values.
+    """
+    # Load config file and apply defaults
+    config = load_config()
+
+    if prd_path is None:
+        prd_path = Path(config.prd)
+        if not prd_path.exists():
+            click.echo(f"Error: PRD file '{prd_path}' does not exist", err=True)
+            sys.exit(1)
+    if progress_path is None:
+        progress_path = Path(config.progress)
+
     prd_content = prd.read_prd(prd_path)
     tasks = prd.parse_tasks(prd_content)
     completed, total = prd.get_completion_status(tasks)
