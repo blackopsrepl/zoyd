@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from rich.console import Group
 from rich.live import Live
+from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.text import Text
 
@@ -27,6 +28,9 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from rich.console import Console, RenderableType
+
+# Default code theme for syntax highlighting in Markdown blocks
+DEFAULT_CODE_THEME = "dracula"
 
 
 class LiveDisplay:
