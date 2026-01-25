@@ -28,3 +28,10 @@ fail_fast = false
 
 # Maximum cost limit in USD (null for no limit)
 # max_cost = 5.0
+
+# Redis storage backend configuration
+storage_backend = "redis"
+redis_host = "10.43.12.252"
+redis_port = 6379
+redis_db = 0
+redis_password = "REDACTED"

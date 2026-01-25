@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from zoyd.config import load_config
 from zoyd.session.models import (
     ClaudeOutput,
     GitCommitRecord,
@@ -850,20 +851,19 @@ def redis_storage():
     Skips tests if Redis is not available or the redis package is not installed.
     Uses a unique key prefix to isolate tests and cleans up after tests.
 
-    Set REDIS_PASSWORD environment variable if Redis requires authentication.
+    Reads Redis password from zoyd.toml configuration.
     """
-    import os
-
     # Skip if redis package is not installed
     try:
         import redis
     except ImportError:
         pytest.skip("redis package not installed")
 
-    # Try to connect to the test Redis server
-    host = "10.43.12.252"
-    port = 6379
-    password = os.environ.get("REDIS_PASSWORD")
+    # Load Redis config from zoyd.toml
+    config = load_config()
+    host = config.redis_host
+    port = config.redis_port
+    password = config.redis_password
     test_prefix = f"zoyd:test:{pytest.importorskip('uuid').uuid4().hex[:8]}:"
 
     try:
@@ -1104,17 +1104,17 @@ class TestRedisStorageConnectionErrorHandling:
 
     def test_redis_key_prefix_isolation(self):
         """Test that different key prefixes isolate data."""
-        import os
-
         # Skip if redis package is not installed
         try:
             import redis
         except ImportError:
             pytest.skip("redis package not installed")
 
-        host = "10.43.12.252"
-        port = 6379
-        password = os.environ.get("REDIS_PASSWORD")
+        # Load Redis config from zoyd.toml
+        config = load_config()
+        host = config.redis_host
+        port = config.redis_port
+        password = config.redis_password
         prefix1 = f"zoyd:test:prefix1:{pytest.importorskip('uuid').uuid4().hex[:8]}:"
         prefix2 = f"zoyd:test:prefix2:{pytest.importorskip('uuid').uuid4().hex[:8]}:"
 
@@ -1156,17 +1156,17 @@ class TestRedisStorageConnectionErrorHandling:
 
     def test_redis_update_statistics(self):
         """Test update_statistics updates session statistics."""
-        import os
-
         # Skip if redis package is not installed
         try:
             import redis
         except ImportError:
             pytest.skip("redis package not installed")
 
-        host = "10.43.12.252"
-        port = 6379
-        password = os.environ.get("REDIS_PASSWORD")
+        # Load Redis config from zoyd.toml
+        config = load_config()
+        host = config.redis_host
+        port = config.redis_port
+        password = config.redis_password
         test_prefix = f"zoyd:test:stats:{pytest.importorskip('uuid').uuid4().hex[:8]}:"
 
         try:
