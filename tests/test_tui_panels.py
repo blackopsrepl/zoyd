@@ -564,11 +564,13 @@ class TestModuleExports:
             ClaudeOutputPanel,
             ErrorPanel,
             WarningPanel,
+            IterationHistoryPanel,
             create_status_bar,
             create_output_panel,
             create_claude_output_panel,
             create_error_panel,
             create_warning_panel,
+            create_iteration_history_panel,
         )
 
         assert StatusBar is not None
@@ -576,11 +578,23 @@ class TestModuleExports:
         assert ClaudeOutputPanel is not None
         assert ErrorPanel is not None
         assert WarningPanel is not None
+        assert IterationHistoryPanel is not None
         assert callable(create_status_bar)
         assert callable(create_output_panel)
         assert callable(create_claude_output_panel)
         assert callable(create_error_panel)
         assert callable(create_warning_panel)
+        assert callable(create_iteration_history_panel)
+
+    def test_iteration_history_panel_importable(self):
+        from zoyd.tui.panels import IterationHistoryPanel
+
+        assert IterationHistoryPanel is not None
+
+    def test_create_iteration_history_panel_importable(self):
+        from zoyd.tui.panels import create_iteration_history_panel
+
+        assert callable(create_iteration_history_panel)
 
     def test_claude_output_panel_importable(self):
         from zoyd.tui.panels import ClaudeOutputPanel
@@ -1003,6 +1017,278 @@ class TestCreateClaudeOutputPanel:
 
         panel = create_claude_output_panel("# Test", code_theme="monokai")
         assert panel._code_theme == "monokai"
+
+
+class TestIterationHistoryPanel:
+    def test_creates_panel(self):
+        from zoyd.tui.panels import IterationHistoryPanel
+
+        panel = IterationHistoryPanel()
+        assert panel is not None
+        assert panel.title == "History"
+
+    def test_custom_title(self):
+        from zoyd.tui.panels import IterationHistoryPanel
+
+        panel = IterationHistoryPanel(title="Iteration History")
+        assert panel.title == "Iteration History"
+
+    def test_custom_max_items(self):
+        from zoyd.tui.panels import IterationHistoryPanel
+
+        panel = IterationHistoryPanel(max_items=5)
+        assert panel.max_items == 5
+
+    def test_add_iteration(self):
+        from zoyd.tui.panels import IterationHistoryPanel
+
+        panel = IterationHistoryPanel()
+        result = panel.add_iteration(1, status="success", cost=0.05, duration=10.5)
+        assert result is panel  # Returns self for chaining
+        assert len(panel._items) == 1
+        assert panel._items[0]["iteration"] == 1
+        assert panel._items[0]["status"] == "success"
+        assert panel._items[0]["cost"] == 0.05
+        assert panel._items[0]["duration"] == 10.5
+
+    def test_add_iteration_with_task(self):
+        from zoyd.tui.panels import IterationHistoryPanel
+
+        panel = IterationHistoryPanel()
+        panel.add_iteration(1, status="running", task="Add new feature")
+        assert panel._items[0]["task"] == "Add new feature"
+
+    def test_method_chaining(self):
+        from zoyd.tui.panels import IterationHistoryPanel
+
+        panel = IterationHistoryPanel()
+        panel.add_iteration(1).add_iteration(2).add_iteration(3)
+        assert len(panel._items) == 3
+
+    def test_max_items_limit(self):
+        from zoyd.tui.panels import IterationHistoryPanel
+
+        panel = IterationHistoryPanel(max_items=3)
+        for i in range(5):
+            panel.add_iteration(i + 1)
+        assert len(panel._items) == 3
+        # Should keep the most recent 3
+        assert panel._items[0]["iteration"] == 3
+        assert panel._items[1]["iteration"] == 4
+        assert panel._items[2]["iteration"] == 5
+
+    def test_update_iteration(self):
+        from zoyd.tui.panels import IterationHistoryPanel
+
+        panel = IterationHistoryPanel()
+        panel.add_iteration(1, status="running")
+        result = panel.update_iteration(1, status="success", duration=15.0)
+        assert result is panel  # Returns self for chaining
+        assert panel._items[0]["status"] == "success"
+        assert panel._items[0]["duration"] == 15.0
+
+    def test_update_iteration_partial(self):
+        from zoyd.tui.panels import IterationHistoryPanel
+
+        panel = IterationHistoryPanel()
+        panel.add_iteration(1, status="running", cost=0.01)
+        panel.update_iteration(1, status="success")
+        # Cost should remain unchanged
+        assert panel._items[0]["cost"] == 0.01
+        assert panel._items[0]["status"] == "success"
+
+    def test_update_nonexistent_iteration(self):
+        from zoyd.tui.panels import IterationHistoryPanel
+
+        panel = IterationHistoryPanel()
+        panel.add_iteration(1, status="running")
+        # Should not raise, just do nothing
+        panel.update_iteration(999, status="success")
+        assert panel._items[0]["status"] == "running"
+
+    def test_clear(self):
+        from zoyd.tui.panels import IterationHistoryPanel
+
+        panel = IterationHistoryPanel()
+        panel.add_iteration(1).add_iteration(2)
+        result = panel.clear()
+        assert result is panel
+        assert len(panel._items) == 0
+
+    def test_render_returns_panel(self):
+        from rich.panel import Panel
+
+        from zoyd.tui.panels import IterationHistoryPanel
+
+        panel = IterationHistoryPanel()
+        panel.add_iteration(1, status="success")
+        rendered = panel.render()
+        assert isinstance(rendered, Panel)
+
+    def test_render_empty_shows_placeholder(self):
+        from zoyd.tui.panels import IterationHistoryPanel
+
+        panel = IterationHistoryPanel()
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        console.print(panel.render())
+        rendered = output.getvalue()
+
+        assert "No iterations yet" in rendered
+
+    def test_render_contains_iteration_number(self):
+        from zoyd.tui.panels import IterationHistoryPanel
+
+        panel = IterationHistoryPanel()
+        panel.add_iteration(5, status="success")
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        console.print(panel.render())
+        rendered = output.getvalue()
+
+        assert "5" in rendered
+
+    def test_render_contains_cost(self):
+        from zoyd.tui.panels import IterationHistoryPanel
+
+        panel = IterationHistoryPanel()
+        panel.add_iteration(1, status="success", cost=0.1234)
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        console.print(panel.render())
+        rendered = output.getvalue()
+
+        assert "$0.1234" in rendered
+
+    def test_render_contains_duration_seconds(self):
+        from zoyd.tui.panels import IterationHistoryPanel
+
+        panel = IterationHistoryPanel()
+        panel.add_iteration(1, status="success", duration=45.5)
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        console.print(panel.render())
+        rendered = output.getvalue()
+
+        assert "45.5s" in rendered
+
+    def test_render_contains_duration_minutes(self):
+        from zoyd.tui.panels import IterationHistoryPanel
+
+        panel = IterationHistoryPanel()
+        panel.add_iteration(1, status="success", duration=125.0)
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        console.print(panel.render())
+        rendered = output.getvalue()
+
+        assert "2m 5s" in rendered
+
+    def test_render_contains_task(self):
+        from zoyd.tui.panels import IterationHistoryPanel
+
+        panel = IterationHistoryPanel()
+        panel.add_iteration(1, status="running", task="Add feature")
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        console.print(panel.render())
+        rendered = output.getvalue()
+
+        assert "Add feature" in rendered
+
+    def test_render_truncates_long_task(self):
+        from zoyd.tui.panels import IterationHistoryPanel
+
+        panel = IterationHistoryPanel()
+        long_task = "This is a very long task description that should be truncated"
+        panel.add_iteration(1, status="running", task=long_task)
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        console.print(panel.render())
+        rendered = output.getvalue()
+
+        assert "..." in rendered
+
+    def test_render_multiple_iterations(self):
+        from zoyd.tui.panels import IterationHistoryPanel
+
+        panel = IterationHistoryPanel()
+        panel.add_iteration(1, status="success", cost=0.05, duration=10.0)
+        panel.add_iteration(2, status="failed", cost=0.03, duration=5.0)
+        panel.add_iteration(3, status="running")
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        console.print(panel.render())
+        rendered = output.getvalue()
+
+        assert "1" in rendered
+        assert "2" in rendered
+        assert "3" in rendered
+
+    def test_print_method(self):
+        from zoyd.tui.panels import IterationHistoryPanel
+
+        panel = IterationHistoryPanel()
+        panel.add_iteration(1, status="success")
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        panel.print(console)
+        rendered = output.getvalue()
+
+        assert "1" in rendered
+
+    def test_format_duration_none(self):
+        from zoyd.tui.panels import IterationHistoryPanel
+
+        panel = IterationHistoryPanel()
+        assert panel._format_duration(None) == "-"
+
+    def test_format_cost_none(self):
+        from zoyd.tui.panels import IterationHistoryPanel
+
+        panel = IterationHistoryPanel()
+        assert panel._format_cost(None) == "-"
+
+    def test_truncate_task_none(self):
+        from zoyd.tui.panels import IterationHistoryPanel
+
+        panel = IterationHistoryPanel()
+        assert panel._truncate_task(None) == "-"
+
+    def test_truncate_task_short(self):
+        from zoyd.tui.panels import IterationHistoryPanel
+
+        panel = IterationHistoryPanel()
+        assert panel._truncate_task("Short task") == "Short task"
+
+
+class TestCreateIterationHistoryPanel:
+    def test_creates_panel(self):
+        from zoyd.tui.panels import create_iteration_history_panel
+
+        panel = create_iteration_history_panel()
+        assert panel is not None
+
+    def test_custom_title(self):
+        from zoyd.tui.panels import create_iteration_history_panel
+
+        panel = create_iteration_history_panel(title="Loop History")
+        assert panel.title == "Loop History"
+
+    def test_custom_max_items(self):
+        from zoyd.tui.panels import create_iteration_history_panel
+
+        panel = create_iteration_history_panel(max_items=20)
+        assert panel.max_items == 20
 
 
 class TestCreateWarningPanel:

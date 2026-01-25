@@ -647,3 +647,235 @@ def create_claude_output_panel(
     panel.set_content(content)
     panel.set_markdown(use_markdown)
     return panel
+
+
+class IterationHistoryPanel:
+    """A panel for displaying recent iteration history.
+
+    Shows a table of recent iterations with their status, cost, and duration.
+    Useful for tracking progress and identifying patterns in the loop execution.
+    """
+
+    # Status icons
+    STATUS_ICONS = {
+        "success": "[success]✓[/]",
+        "failed": "[error]✗[/]",
+        "running": "[active]◉[/]",
+        "pending": "[dim]○[/]",
+    }
+
+    def __init__(
+        self,
+        title: str = "History",
+        *,
+        max_items: int = 10,
+    ) -> None:
+        """Initialize the iteration history panel.
+
+        Args:
+            title: Title for the panel.
+            max_items: Maximum number of iterations to display.
+        """
+        self.title = title
+        self.max_items = max_items
+        self._items: list[dict] = []
+
+    def add_iteration(
+        self,
+        iteration: int,
+        *,
+        status: str = "pending",
+        cost: float | None = None,
+        duration: float | None = None,
+        task: str | None = None,
+    ) -> "IterationHistoryPanel":
+        """Add an iteration to the history.
+
+        Args:
+            iteration: Iteration number.
+            status: Status string - "success", "failed", "running", or "pending".
+            cost: Cost in USD for this iteration.
+            duration: Duration in seconds.
+            task: Task description that was worked on.
+
+        Returns:
+            Self for method chaining.
+        """
+        item = {
+            "iteration": iteration,
+            "status": status,
+            "cost": cost,
+            "duration": duration,
+            "task": task,
+        }
+        self._items.append(item)
+
+        # Trim to max items
+        if len(self._items) > self.max_items:
+            self._items = self._items[-self.max_items :]
+
+        return self
+
+    def update_iteration(
+        self,
+        iteration: int,
+        *,
+        status: str | None = None,
+        cost: float | None = None,
+        duration: float | None = None,
+        task: str | None = None,
+    ) -> "IterationHistoryPanel":
+        """Update an existing iteration in the history.
+
+        Args:
+            iteration: Iteration number to update.
+            status: New status string (if provided).
+            cost: New cost value (if provided).
+            duration: New duration value (if provided).
+            task: New task description (if provided).
+
+        Returns:
+            Self for method chaining.
+        """
+        for item in self._items:
+            if item["iteration"] == iteration:
+                if status is not None:
+                    item["status"] = status
+                if cost is not None:
+                    item["cost"] = cost
+                if duration is not None:
+                    item["duration"] = duration
+                if task is not None:
+                    item["task"] = task
+                break
+        return self
+
+    def clear(self) -> "IterationHistoryPanel":
+        """Clear all iteration history.
+
+        Returns:
+            Self for method chaining.
+        """
+        self._items = []
+        return self
+
+    def _format_duration(self, seconds: float | None) -> str:
+        """Format duration in seconds to a readable string.
+
+        Args:
+            seconds: Duration in seconds, or None.
+
+        Returns:
+            Formatted duration string.
+        """
+        if seconds is None:
+            return "-"
+        if seconds < 60:
+            return f"{seconds:.1f}s"
+        minutes = int(seconds // 60)
+        secs = seconds % 60
+        return f"{minutes}m {secs:.0f}s"
+
+    def _format_cost(self, cost: float | None) -> str:
+        """Format cost in USD to a readable string.
+
+        Args:
+            cost: Cost in USD, or None.
+
+        Returns:
+            Formatted cost string.
+        """
+        if cost is None:
+            return "-"
+        return f"${cost:.4f}"
+
+    def _truncate_task(self, task: str | None, max_len: int = 30) -> str:
+        """Truncate task text to fit in the display.
+
+        Args:
+            task: Task description, or None.
+            max_len: Maximum length before truncation.
+
+        Returns:
+            Truncated task string.
+        """
+        if task is None:
+            return "-"
+        if len(task) <= max_len:
+            return task
+        return task[: max_len - 3] + "..."
+
+    def render(self) -> Panel:
+        """Render the iteration history panel.
+
+        Returns:
+            A Rich Panel containing the iteration history table.
+        """
+        table = Table(
+            show_header=True,
+            show_edge=False,
+            box=None,
+            padding=(0, 1),
+            expand=True,
+        )
+
+        # Define columns
+        table.add_column("#", style="dim", width=4, justify="right")
+        table.add_column("Status", width=7, justify="center")
+        table.add_column("Cost", width=10, justify="right")
+        table.add_column("Duration", width=10, justify="right")
+        table.add_column("Task", ratio=1)
+
+        # Add rows
+        if not self._items:
+            # Show placeholder when empty
+            return Panel(
+                Text("No iterations yet", style="dim"),
+                title=f"[panel.title]{self.title}[/]",
+                border_style=COLORS["twilight"],
+                padding=(0, 1),
+            )
+
+        for item in self._items:
+            status_icon = self.STATUS_ICONS.get(item["status"], "[dim]?[/]")
+            table.add_row(
+                str(item["iteration"]),
+                status_icon,
+                self._format_cost(item["cost"]),
+                self._format_duration(item["duration"]),
+                self._truncate_task(item["task"]),
+            )
+
+        return Panel(
+            table,
+            title=f"[panel.title]{self.title}[/]",
+            border_style=COLORS["twilight"],
+            padding=(0, 1),
+        )
+
+    def print(self, console: Console) -> None:
+        """Print the iteration history panel to the console.
+
+        Args:
+            console: Rich Console to print to.
+        """
+        console.print(self.render())
+
+
+def create_iteration_history_panel(
+    *,
+    title: str = "History",
+    max_items: int = 10,
+) -> IterationHistoryPanel:
+    """Create an iteration history panel.
+
+    Factory function for creating IterationHistoryPanel.
+
+    Args:
+        title: Title for the panel.
+        max_items: Maximum number of iterations to display.
+
+    Returns:
+        A configured IterationHistoryPanel instance.
+    """
+    return IterationHistoryPanel(title=title, max_items=max_items)

@@ -17,6 +17,7 @@ from zoyd.prd import Task
 from zoyd.tui.dashboard import (
     LAYOUT_BANNER,
     LAYOUT_BODY,
+    LAYOUT_HISTORY,
     LAYOUT_MAIN,
     LAYOUT_OUTPUT,
     LAYOUT_PROGRESS,
@@ -67,6 +68,10 @@ class TestDashboardState:
         assert state.error_message is None
         assert state.error_details is None
 
+        # History defaults
+        assert state.iteration_history == []
+        assert state.max_history_items == 10
+
     def test_reset_error(self) -> None:
         """Test clearing error state."""
         state = DashboardState()
@@ -91,6 +96,59 @@ class TestDashboardState:
         # Oldest lines should be dropped
         assert "Line 0" not in state.output_lines
         assert "Line 99" in state.output_lines
+
+    def test_add_iteration_to_history(self) -> None:
+        """Test adding an iteration to history."""
+        state = DashboardState()
+        state.add_iteration_to_history(
+            1, status="success", cost=0.05, duration=10.5, task="Test task"
+        )
+
+        assert len(state.iteration_history) == 1
+        assert state.iteration_history[0]["iteration"] == 1
+        assert state.iteration_history[0]["status"] == "success"
+        assert state.iteration_history[0]["cost"] == 0.05
+        assert state.iteration_history[0]["duration"] == 10.5
+        assert state.iteration_history[0]["task"] == "Test task"
+
+    def test_add_iteration_to_history_max_items(self) -> None:
+        """Test that history respects max items limit."""
+        state = DashboardState()
+        state.max_history_items = 5
+
+        for i in range(10):
+            state.add_iteration_to_history(i + 1, status="success")
+
+        assert len(state.iteration_history) == 5
+        # Should keep the most recent items
+        assert state.iteration_history[0]["iteration"] == 6
+        assert state.iteration_history[4]["iteration"] == 10
+
+    def test_update_iteration_in_history(self) -> None:
+        """Test updating an iteration in history."""
+        state = DashboardState()
+        state.add_iteration_to_history(1, status="running")
+        state.update_iteration_in_history(1, status="success", duration=15.0)
+
+        assert state.iteration_history[0]["status"] == "success"
+        assert state.iteration_history[0]["duration"] == 15.0
+
+    def test_update_iteration_in_history_partial(self) -> None:
+        """Test partial update preserves other fields."""
+        state = DashboardState()
+        state.add_iteration_to_history(1, status="running", cost=0.01)
+        state.update_iteration_in_history(1, status="success")
+
+        assert state.iteration_history[0]["status"] == "success"
+        assert state.iteration_history[0]["cost"] == 0.01  # Unchanged
+
+    def test_update_nonexistent_iteration(self) -> None:
+        """Test updating nonexistent iteration does nothing."""
+        state = DashboardState()
+        state.add_iteration_to_history(1, status="running")
+        state.update_iteration_in_history(999, status="success")
+
+        assert state.iteration_history[0]["status"] == "running"
 
 
 class TestDashboard:
@@ -146,6 +204,7 @@ class TestDashboard:
             LAYOUT_SIDEBAR,
             LAYOUT_STATUS,
             LAYOUT_OUTPUT,
+            LAYOUT_HISTORY,
             LAYOUT_TASKS,
             LAYOUT_PROGRESS,
         ]
@@ -240,6 +299,22 @@ class TestDashboardRendering:
         dashboard.state.iteration = 3
         dashboard.state.max_iterations = 10
         result = dashboard._render_progress()
+        assert isinstance(result, Panel)
+
+    def test_render_history_empty(self, dashboard: Dashboard) -> None:
+        """Test history rendering with no history."""
+        result = dashboard._render_history()
+        assert isinstance(result, Panel)
+
+    def test_render_history_with_items(self, dashboard: Dashboard) -> None:
+        """Test history rendering with items."""
+        dashboard.state.add_iteration_to_history(
+            1, status="success", cost=0.05, duration=10.5
+        )
+        dashboard.state.add_iteration_to_history(
+            2, status="failed", cost=0.03, duration=5.0
+        )
+        result = dashboard._render_history()
         assert isinstance(result, Panel)
 
     def test_full_render(self, dashboard: Dashboard) -> None:
@@ -379,6 +454,26 @@ class TestDashboardStateUpdates:
         assert dashboard.state.error_message is None
         assert dashboard.state.error_details is None
 
+    def test_add_iteration_history(self, dashboard: Dashboard) -> None:
+        """Test adding iteration to history."""
+        result = dashboard.add_iteration_history(
+            1, status="success", cost=0.05, duration=10.0, task="Test task"
+        )
+
+        assert result is dashboard
+        assert len(dashboard.state.iteration_history) == 1
+        assert dashboard.state.iteration_history[0]["iteration"] == 1
+        assert dashboard.state.iteration_history[0]["status"] == "success"
+
+    def test_update_iteration_history(self, dashboard: Dashboard) -> None:
+        """Test updating iteration in history."""
+        dashboard.add_iteration_history(1, status="running")
+        result = dashboard.update_iteration_history(1, status="success", duration=15.0)
+
+        assert result is dashboard
+        assert dashboard.state.iteration_history[0]["status"] == "success"
+        assert dashboard.state.iteration_history[0]["duration"] == 15.0
+
 
 class TestDashboardEventHandlers:
     """Tests for Dashboard event handler integration."""
@@ -451,6 +546,19 @@ class TestDashboardEventHandlers:
         assert dashboard.state.tasks_total == 10
         assert dashboard.state.current_output == ""
 
+    def test_on_iteration_start_adds_to_history(self, dashboard: Dashboard) -> None:
+        """Test ITERATION_START event adds to history."""
+        event = Event(
+            EventType.ITERATION_START,
+            {"iteration": 5, "task": "Test task"},
+        )
+        dashboard._on_iteration_start(event)
+
+        assert len(dashboard.state.iteration_history) == 1
+        assert dashboard.state.iteration_history[0]["iteration"] == 5
+        assert dashboard.state.iteration_history[0]["status"] == "running"
+        assert dashboard.state.iteration_history[0]["task"] == "Test task"
+
     def test_on_iteration_end(self, dashboard: Dashboard) -> None:
         """Test ITERATION_END event handler."""
         dashboard.state.iteration = 5
@@ -462,6 +570,21 @@ class TestDashboardEventHandlers:
 
         assert "success" in dashboard.state.status_message
         assert "15.5" in dashboard.state.status_message
+
+    def test_on_iteration_end_updates_history(self, dashboard: Dashboard) -> None:
+        """Test ITERATION_END event updates history."""
+        dashboard.state.iteration = 5
+        dashboard.state.add_iteration_to_history(5, status="running")
+
+        event = Event(
+            EventType.ITERATION_END,
+            {"success": True, "duration": 15.5, "cost": 0.1234},
+        )
+        dashboard._on_iteration_end(event)
+
+        assert dashboard.state.iteration_history[0]["status"] == "success"
+        assert dashboard.state.iteration_history[0]["duration"] == 15.5
+        assert dashboard.state.iteration_history[0]["cost"] == 0.1234
 
     def test_on_claude_invoke(self, dashboard: Dashboard) -> None:
         """Test CLAUDE_INVOKE event handler."""
@@ -527,6 +650,19 @@ class TestDashboardEventHandlers:
         dashboard._on_cost_update(event)
 
         assert dashboard.state.cost == 2.5
+
+    def test_on_cost_update_updates_history(self, dashboard: Dashboard) -> None:
+        """Test COST_UPDATE event updates iteration history."""
+        dashboard.state.iteration = 5
+        dashboard.state.add_iteration_to_history(5, status="running")
+
+        event = Event(
+            EventType.COST_UPDATE,
+            {"total_cost": 2.5, "iteration_cost": 0.5},
+        )
+        dashboard._on_cost_update(event)
+
+        assert dashboard.state.iteration_history[0]["cost"] == 0.5
 
     def test_on_cost_limit_exceeded(self, dashboard: Dashboard) -> None:
         """Test COST_LIMIT_EXCEEDED event handler."""

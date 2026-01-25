@@ -24,7 +24,12 @@ from rich.text import Text
 from zoyd.prd import Task
 from zoyd.tui.banner import MIND_FLAYER_COMPACT, MIND_FLAYER_FULL
 from zoyd.tui.events import Event, EventEmitter, EventType
-from zoyd.tui.panels import create_claude_output_panel, create_error_panel, create_status_bar
+from zoyd.tui.panels import (
+    create_claude_output_panel,
+    create_error_panel,
+    create_iteration_history_panel,
+    create_status_bar,
+)
 from zoyd.tui.progress import create_progress_panel
 from zoyd.tui.task_tree import render_task_tree
 from zoyd.tui.theme import COLORS
@@ -39,6 +44,7 @@ LAYOUT_STATUS = "status"
 LAYOUT_TASKS = "tasks"
 LAYOUT_OUTPUT = "output"
 LAYOUT_PROGRESS = "progress"
+LAYOUT_HISTORY = "history"
 LAYOUT_MAIN = "main"
 LAYOUT_SIDEBAR = "sidebar"
 LAYOUT_BODY = "body"
@@ -87,10 +93,75 @@ class DashboardState:
         self.error_message: str | None = None
         self.error_details: str | None = None
 
+        # Iteration history
+        self.iteration_history: list[dict] = []
+        self.max_history_items: int = 10
+
     def reset_error(self) -> None:
         """Clear any error state."""
         self.error_message = None
         self.error_details = None
+
+    def add_iteration_to_history(
+        self,
+        iteration: int,
+        *,
+        status: str = "pending",
+        cost: float | None = None,
+        duration: float | None = None,
+        task: str | None = None,
+    ) -> None:
+        """Add an iteration to the history.
+
+        Args:
+            iteration: Iteration number.
+            status: Status string - "success", "failed", "running", or "pending".
+            cost: Cost in USD for this iteration.
+            duration: Duration in seconds.
+            task: Task description that was worked on.
+        """
+        item = {
+            "iteration": iteration,
+            "status": status,
+            "cost": cost,
+            "duration": duration,
+            "task": task,
+        }
+        self.iteration_history.append(item)
+
+        # Trim to max items
+        if len(self.iteration_history) > self.max_history_items:
+            self.iteration_history = self.iteration_history[-self.max_history_items :]
+
+    def update_iteration_in_history(
+        self,
+        iteration: int,
+        *,
+        status: str | None = None,
+        cost: float | None = None,
+        duration: float | None = None,
+        task: str | None = None,
+    ) -> None:
+        """Update an existing iteration in the history.
+
+        Args:
+            iteration: Iteration number to update.
+            status: New status string (if provided).
+            cost: New cost value (if provided).
+            duration: New duration value (if provided).
+            task: New task description (if provided).
+        """
+        for item in self.iteration_history:
+            if item["iteration"] == iteration:
+                if status is not None:
+                    item["status"] = status
+                if cost is not None:
+                    item["cost"] = cost
+                if duration is not None:
+                    item["duration"] = duration
+                if task is not None:
+                    item["task"] = task
+                break
 
 
 class Dashboard:
@@ -154,10 +225,11 @@ class Dashboard:
             Layout(name=LAYOUT_SIDEBAR, ratio=1),
         )
 
-        # Main area: status at top, output below
+        # Main area: status at top, output below, history at bottom
         layout[LAYOUT_MAIN].split_column(
             Layout(name=LAYOUT_STATUS, size=5),
-            Layout(name=LAYOUT_OUTPUT),
+            Layout(name=LAYOUT_OUTPUT, ratio=2),
+            Layout(name=LAYOUT_HISTORY, size=12),
         )
 
         # Sidebar: tasks at top, progress below
@@ -303,6 +375,29 @@ class Dashboard:
         )
         return panel.render()
 
+    def _render_history(self) -> RenderableType:
+        """Render the iteration history section.
+
+        Returns:
+            Rich renderable for iteration history.
+        """
+        history_panel = create_iteration_history_panel(
+            title="Iteration History",
+            max_items=self.state.max_history_items,
+        )
+
+        # Populate with history items
+        for item in self.state.iteration_history:
+            history_panel.add_iteration(
+                item["iteration"],
+                status=item.get("status", "pending"),
+                cost=item.get("cost"),
+                duration=item.get("duration"),
+                task=item.get("task"),
+            )
+
+        return history_panel.render()
+
     def _render(self) -> Layout:
         """Render the complete dashboard.
 
@@ -314,6 +409,7 @@ class Dashboard:
         self._layout[LAYOUT_TASKS].update(self._render_tasks())
         self._layout[LAYOUT_OUTPUT].update(self._render_output())
         self._layout[LAYOUT_PROGRESS].update(self._render_progress())
+        self._layout[LAYOUT_HISTORY].update(self._render_history())
 
         return self._layout
 
@@ -497,6 +593,60 @@ class Dashboard:
         self.refresh()
         return self
 
+    def add_iteration_history(
+        self,
+        iteration: int,
+        *,
+        status: str = "pending",
+        cost: float | None = None,
+        duration: float | None = None,
+        task: str | None = None,
+    ) -> Dashboard:
+        """Add an iteration to the history.
+
+        Args:
+            iteration: Iteration number.
+            status: Status string - "success", "failed", "running", or "pending".
+            cost: Cost in USD for this iteration.
+            duration: Duration in seconds.
+            task: Task description that was worked on.
+
+        Returns:
+            Self for method chaining.
+        """
+        self.state.add_iteration_to_history(
+            iteration, status=status, cost=cost, duration=duration, task=task
+        )
+        self.refresh()
+        return self
+
+    def update_iteration_history(
+        self,
+        iteration: int,
+        *,
+        status: str | None = None,
+        cost: float | None = None,
+        duration: float | None = None,
+        task: str | None = None,
+    ) -> Dashboard:
+        """Update an existing iteration in the history.
+
+        Args:
+            iteration: Iteration number to update.
+            status: New status string (if provided).
+            cost: New cost value (if provided).
+            duration: New duration value (if provided).
+            task: New task description (if provided).
+
+        Returns:
+            Self for method chaining.
+        """
+        self.state.update_iteration_in_history(
+            iteration, status=status, cost=cost, duration=duration, task=task
+        )
+        self.refresh()
+        return self
+
     # --- Event handler integration ---
 
     def connect_events(self, emitter: EventEmitter) -> Dashboard:
@@ -548,15 +698,32 @@ class Dashboard:
         self.state.status_message = f"Starting iteration {self.state.iteration}"
         self.state.current_output = ""
         self.clear_error()
+
+        # Add iteration to history with running status
+        task = event.get("task", None)
+        self.state.add_iteration_to_history(
+            self.state.iteration,
+            status="running",
+            task=task,
+        )
         self.refresh()
 
     def _on_iteration_end(self, event: Event) -> None:
         """Handle ITERATION_END event."""
         success = event.get("success", False)
         duration = event.get("duration", 0)
+        cost = event.get("cost", None)
         self.state.status_message = (
             f"Iteration {self.state.iteration} completed "
             f"({'success' if success else 'failed'}, {duration:.1f}s)"
+        )
+
+        # Update iteration history with final status and duration
+        self.state.update_iteration_in_history(
+            self.state.iteration,
+            status="success" if success else "failed",
+            duration=duration,
+            cost=cost,
         )
         self.refresh()
 
@@ -602,6 +769,14 @@ class Dashboard:
     def _on_cost_update(self, event: Event) -> None:
         """Handle COST_UPDATE event."""
         self.state.cost = event.get("total_cost", 0)
+        iteration_cost = event.get("iteration_cost", None)
+
+        # Update iteration history with the cost
+        if iteration_cost is not None:
+            self.state.update_iteration_in_history(
+                self.state.iteration,
+                cost=iteration_cost,
+            )
         self.refresh()
 
     def _on_cost_limit_exceeded(self, event: Event) -> None:

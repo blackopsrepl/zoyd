@@ -27,11 +27,13 @@ from zoyd.tui.panels import (
     ClaudeOutputPanel,
     ErrorPanel,
     WarningPanel,
+    IterationHistoryPanel,
     create_status_bar,
     create_output_panel,
     create_claude_output_panel,
     create_error_panel,
     create_warning_panel,
+    create_iteration_history_panel,
 )
 
 # Re-export status rendering
@@ -90,11 +92,13 @@ __all__ = [
     "ClaudeOutputPanel",
     "ErrorPanel",
     "WarningPanel",
+    "IterationHistoryPanel",
     "create_status_bar",
     "create_output_panel",
     "create_claude_output_panel",
     "create_error_panel",
     "create_warning_panel",
+    "create_iteration_history_panel",
     # Status rendering
     "render_status",
     "print_status",
