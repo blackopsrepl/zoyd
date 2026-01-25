@@ -1,5 +1,6 @@
 """Click CLI entry point for Zoyd."""
 
+import json
 import sys
 from pathlib import Path
 
@@ -61,9 +62,9 @@ def cli():
     help="Seconds to pause between iterations (default: 1.0)",
 )
 @click.option(
-    "--auto-commit",
-    is_flag=True,
-    help="Automatically commit changes after each completed task",
+    "--auto-commit/--no-auto-commit",
+    default=True,
+    help="Automatically commit changes after each completed task (default: enabled)",
 )
 @click.option(
     "--resume",
@@ -71,11 +72,9 @@ def cli():
     help="Resume from existing progress file (skip already-completed tasks)",
 )
 @click.option(
-    "--jail-dir",
-    "jail_dir",
-    default=None,
-    type=click.Path(dir_okay=True, file_okay=False, path_type=Path),
-    help="Directory for jail worktrees (default: .zoyd-jails/ in repo root)",
+    "--fail-fast",
+    is_flag=True,
+    help="Exit immediately on first failure instead of retrying",
 )
 def run(
     prd_path: Path,
@@ -87,21 +86,17 @@ def run(
     delay: float,
     auto_commit: bool,
     resume: bool,
-    jail_dir: Path | None,
+    fail_fast: bool,
 ):
     """Run the Zoyd loop against a PRD file.
 
-    Zoyd operates exclusively in jail mode using git worktrees and sandbox
-    isolation. Changes are made in an isolated worktree and merged back
-    to the source repository on completion.
+    Zoyd invokes Claude Code repeatedly to complete tasks defined in the PRD.
+    Changes are made directly in the current directory with sandbox isolation.
     """
     click.echo(f"Zoyd v{__version__}")
     click.echo(f"PRD: {prd_path}")
     click.echo(f"Progress: {progress_path}")
     click.echo(f"Max iterations: {max_iterations}")
-    click.echo("Mode: JAIL (worktree + sandbox isolation)")
-    if jail_dir:
-        click.echo(f"Jail directory: {jail_dir}")
     if model:
         click.echo(f"Model: {model}")
     if dry_run:
@@ -137,7 +132,7 @@ def run(
         delay=delay,
         auto_commit=auto_commit,
         resume=resume,
-        jail_dir=jail_dir,
+        fail_fast=fail_fast,
     )
 
     exit_code = runner.run()
@@ -159,11 +154,46 @@ def run(
     type=click.Path(dir_okay=False, path_type=Path),
     help="Path to progress file (default: progress.txt)",
 )
-def status(prd_path: Path, progress_path: Path):
+@click.option(
+    "--json",
+    "json_output",
+    is_flag=True,
+    help="Output status in JSON format for machine-readable output",
+)
+def status(prd_path: Path, progress_path: Path, json_output: bool):
     """Show PRD completion status."""
     prd_content = prd.read_prd(prd_path)
     tasks = prd.parse_tasks(prd_content)
     completed, total = prd.get_completion_status(tasks)
+    is_complete = prd.is_all_complete(tasks)
+    next_task = prd.get_next_incomplete_task(tasks)
+
+    iteration_count = 0
+    if progress_path.exists():
+        progress_content = progress.read_progress(progress_path)
+        iteration_count = progress.get_iteration_count(progress_content)
+
+    if json_output:
+        output = {
+            "prd": str(prd_path),
+            "tasks": {
+                "completed": completed,
+                "total": total,
+                "items": [
+                    {
+                        "text": task.text,
+                        "complete": task.complete,
+                        "line_number": task.line_number,
+                    }
+                    for task in tasks
+                ],
+            },
+            "iterations": iteration_count,
+            "status": "complete" if is_complete else "in_progress",
+            "next_task": next_task.text if next_task else None,
+        }
+        click.echo(json.dumps(output, indent=2))
+        sys.exit(0 if is_complete else 1)
 
     click.echo(f"PRD: {prd_path}")
     click.echo(f"Tasks: {completed}/{total} complete")
@@ -176,17 +206,14 @@ def status(prd_path: Path, progress_path: Path):
             click.echo(f"  {marker} {task.text}")
         click.echo()
 
-    if progress_path.exists():
-        progress_content = progress.read_progress(progress_path)
-        iteration_count = progress.get_iteration_count(progress_content)
+    if iteration_count > 0:
         click.echo(f"Iterations completed: {iteration_count}")
 
-    if prd.is_all_complete(tasks):
+    if is_complete:
         click.echo("\nStatus: COMPLETE")
         sys.exit(0)
     else:
         click.echo("\nStatus: IN PROGRESS")
-        next_task = prd.get_next_incomplete_task(tasks)
         if next_task:
             click.echo(f"Next task: {next_task.text}")
         sys.exit(1)

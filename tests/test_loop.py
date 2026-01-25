@@ -12,6 +12,7 @@ from zoyd.loop import (
     commit_changes,
     generate_commit_message,
     detect_cannot_complete,
+    format_duration,
     COMMIT_PROMPT_TEMPLATE,
 )
 from zoyd.cli import cli
@@ -200,17 +201,17 @@ class TestBuildPrompt:
 
 
 class TestAutoCommit:
-    def test_auto_commit_default_false(self, tmp_path):
-        """Test that auto_commit defaults to False."""
+    def test_auto_commit_default_true(self, tmp_path):
+        """Test that auto_commit defaults to True."""
         prd_file = tmp_path / "PRD.md"
         prd_file.write_text("# PRD\n- [ ] Task 1")
         progress_file = tmp_path / "progress.txt"
 
         runner = LoopRunner(prd_path=prd_file, progress_path=progress_file)
-        assert runner.auto_commit is False
+        assert runner.auto_commit is True
 
-    def test_auto_commit_can_be_enabled(self, tmp_path):
-        """Test that auto_commit can be enabled."""
+    def test_auto_commit_can_be_disabled(self, tmp_path):
+        """Test that auto_commit can be disabled."""
         prd_file = tmp_path / "PRD.md"
         prd_file.write_text("# PRD\n- [ ] Task 1")
         progress_file = tmp_path / "progress.txt"
@@ -218,9 +219,9 @@ class TestAutoCommit:
         runner = LoopRunner(
             prd_path=prd_file,
             progress_path=progress_file,
-            auto_commit=True,
+            auto_commit=False,
         )
-        assert runner.auto_commit is True
+        assert runner.auto_commit is False
 
     def test_commit_prompt_no_coauthor(self):
         """Test that commit prompt explicitly forbids Co-Author lines."""
@@ -316,24 +317,13 @@ class TestResume:
         )
         assert runner.resume is True
 
-    @patch("zoyd.loop.create_jail")
-    @patch("zoyd.loop.get_repo_root")
-    def test_resume_preserves_progress_file(self, mock_get_repo, mock_create_jail, git_repo):
+    def test_resume_preserves_progress_file(self, tmp_path):
         """Test that resume mode does not reinitialize progress file."""
-        prd_file = git_repo / "PRD.md"
+        prd_file = tmp_path / "PRD.md"
         prd_file.write_text("# PRD\n- [x] Task 1\n- [x] Task 2")
-        progress_file = git_repo / "progress.txt"
+        progress_file = tmp_path / "progress.txt"
         existing_content = "# Zoyd Progress Log\n\n## Iteration 1 - 2026-01-25\n\nSome output\n"
         progress_file.write_text(existing_content)
-
-        # Mock jail to avoid actual worktree creation
-        mock_get_repo.return_value = git_repo
-        mock_jail = MagicMock()
-        mock_jail.worktree_path = git_repo  # Use same path for simplicity
-        mock_jail.branch_name = "test-branch"
-        mock_jail.source_repo = git_repo
-        mock_jail.sync_to_source.return_value = (True, "Synced")
-        mock_create_jail.return_value = mock_jail
 
         runner = LoopRunner(
             prd_path=prd_file,
@@ -347,22 +337,11 @@ class TestResume:
         # Progress file should still have original content (not reinitialized)
         assert "## Iteration 1" in progress_file.read_text()
 
-    @patch("zoyd.loop.create_jail")
-    @patch("zoyd.loop.get_repo_root")
-    def test_no_resume_initializes_progress_file(self, mock_get_repo, mock_create_jail, git_repo):
+    def test_no_resume_initializes_progress_file(self, tmp_path):
         """Test that without resume, progress file is initialized if missing."""
-        prd_file = git_repo / "PRD.md"
+        prd_file = tmp_path / "PRD.md"
         prd_file.write_text("# PRD\n- [x] Task 1")
-        progress_file = git_repo / "progress.txt"
-
-        # Mock jail
-        mock_get_repo.return_value = git_repo
-        mock_jail = MagicMock()
-        mock_jail.worktree_path = git_repo
-        mock_jail.branch_name = "test-branch"
-        mock_jail.source_repo = git_repo
-        mock_jail.sync_to_source.return_value = (True, "Synced")
-        mock_create_jail.return_value = mock_jail
+        progress_file = tmp_path / "progress.txt"
 
         runner = LoopRunner(
             prd_path=prd_file,
@@ -427,30 +406,7 @@ class TestResumeCLI:
             assert "[x] Task 2" in result.output
 
 
-class TestJailCLI:
-    def test_jail_dir_flag_in_help(self):
-        """Test that --jail-dir flag appears in CLI help."""
-        runner = CliRunner()
-        result = runner.invoke(cli, ["run", "--help"])
-        assert result.exit_code == 0
-        assert "--jail-dir" in result.output
-        assert "Directory for jail worktrees" in result.output
-
-    def test_jail_mode_displayed(self, tmp_path):
-        """Test that jail mode is shown in output."""
-        runner = CliRunner()
-        prd_file = tmp_path / "PRD.md"
-        prd_file.write_text("# PRD\n- [x] Task 1")
-        progress_file = tmp_path / "progress.txt"
-
-        # This will fail due to not being a git repo, but we can check output before that
-        result = runner.invoke(cli, [
-            "run",
-            "--prd", str(prd_file),
-            "--progress", str(progress_file),
-        ])
-        assert "Mode: JAIL (worktree + sandbox isolation)" in result.output
-
+class TestSandboxMode:
     def test_sandbox_in_invoke_claude(self):
         """Test that invoke_claude enables sandbox via --settings."""
         from zoyd.loop import invoke_claude
@@ -467,31 +423,6 @@ class TestJailCLI:
             settings_json = cmd[settings_idx + 1]
             assert '"sandbox"' in settings_json
             assert '"enabled": true' in settings_json
-
-
-class TestJailDir:
-    def test_jail_dir_default_none(self, tmp_path):
-        """Test that jail_dir defaults to None."""
-        prd_file = tmp_path / "PRD.md"
-        prd_file.write_text("# PRD\n- [ ] Task 1")
-        progress_file = tmp_path / "progress.txt"
-
-        runner = LoopRunner(prd_path=prd_file, progress_path=progress_file)
-        assert runner.jail_dir is None
-
-    def test_jail_dir_can_be_set(self, tmp_path):
-        """Test that jail_dir can be set."""
-        prd_file = tmp_path / "PRD.md"
-        prd_file.write_text("# PRD\n- [ ] Task 1")
-        progress_file = tmp_path / "progress.txt"
-        jail_dir = tmp_path / "jails"
-
-        runner = LoopRunner(
-            prd_path=prd_file,
-            progress_path=progress_file,
-            jail_dir=jail_dir,
-        )
-        assert runner.jail_dir == jail_dir
 
 
 class TestDetectCannotComplete:
@@ -586,3 +517,500 @@ class TestDetectCannotComplete:
         detected, reason = detect_cannot_complete(output)
         assert detected is True
         assert "require" in reason.lower()
+
+
+class TestFailFast:
+    """Tests for fail-fast functionality."""
+
+    def test_fail_fast_default_false(self, tmp_path):
+        """Test that fail_fast defaults to False."""
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(prd_path=prd_file, progress_path=progress_file)
+        assert runner.fail_fast is False
+
+    def test_fail_fast_can_be_enabled(self, tmp_path):
+        """Test that fail_fast can be enabled."""
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            fail_fast=True,
+        )
+        assert runner.fail_fast is True
+
+    @patch("zoyd.loop.invoke_claude")
+    def test_fail_fast_exits_on_first_failure(self, mock_invoke, tmp_path):
+        """Test that fail_fast mode exits immediately on first failure."""
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1\n- [ ] Task 2")
+        progress_file = tmp_path / "progress.txt"
+
+        mock_invoke.return_value = (1, "Error: something went wrong")
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            fail_fast=True,
+            max_iterations=10,
+        )
+        exit_code = runner.run()
+
+        assert exit_code == 2
+        # Should only call Claude once (fail-fast)
+        assert mock_invoke.call_count == 1
+
+    @patch("zoyd.loop.invoke_claude")
+    def test_no_fail_fast_retries_on_failure(self, mock_invoke, tmp_path):
+        """Test that without fail_fast, failures are retried up to max."""
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        mock_invoke.return_value = (1, "Error: something went wrong")
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            fail_fast=False,
+            max_iterations=10,
+            delay=0,  # No delay for testing
+        )
+        # Patch time.sleep to avoid waiting
+        with patch("zoyd.loop.time.sleep"):
+            exit_code = runner.run()
+
+        assert exit_code == 2
+        # Should call Claude 3 times (max_consecutive_failures)
+        assert mock_invoke.call_count == 3
+
+
+class TestFailFastCLI:
+    """Tests for fail-fast CLI option."""
+
+    def test_fail_fast_flag_in_help(self):
+        """Test that --fail-fast flag appears in CLI help."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["run", "--help"])
+        assert result.exit_code == 0
+        assert "--fail-fast" in result.output
+        assert "Exit immediately on first failure" in result.output
+
+
+class TestStatusJsonCLI:
+    """Tests for status --json CLI option."""
+
+    def test_json_flag_in_help(self):
+        """Test that --json flag appears in status CLI help."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["status", "--help"])
+        assert result.exit_code == 0
+        assert "--json" in result.output
+        assert "JSON format" in result.output
+
+    def test_json_output_incomplete(self, tmp_path):
+        """Test JSON output for incomplete PRD."""
+        import json
+
+        runner = CliRunner()
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [x] Task 1\n- [ ] Task 2\n- [ ] Task 3")
+        progress_file = tmp_path / "progress.txt"
+        progress_file.write_text("# Zoyd Progress Log\n\n## Iteration 1 - 2026-01-25\n\nDone\n")
+
+        result = runner.invoke(cli, [
+            "status",
+            "--prd", str(prd_file),
+            "--progress", str(progress_file),
+            "--json",
+        ])
+        assert result.exit_code == 1  # IN PROGRESS status
+
+        output = json.loads(result.output)
+        assert output["prd"] == str(prd_file)
+        assert output["tasks"]["completed"] == 1
+        assert output["tasks"]["total"] == 3
+        assert len(output["tasks"]["items"]) == 3
+        assert output["tasks"]["items"][0]["text"] == "Task 1"
+        assert output["tasks"]["items"][0]["complete"] is True
+        assert output["tasks"]["items"][1]["text"] == "Task 2"
+        assert output["tasks"]["items"][1]["complete"] is False
+        assert output["iterations"] == 1
+        assert output["status"] == "in_progress"
+        assert output["next_task"] == "Task 2"
+
+    def test_json_output_complete(self, tmp_path):
+        """Test JSON output for complete PRD."""
+        import json
+
+        runner = CliRunner()
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [x] Task 1\n- [x] Task 2")
+        progress_file = tmp_path / "progress.txt"
+        progress_file.write_text("# Zoyd Progress Log\n\n## Iteration 1 - 2026-01-25\n\nDone\n\n## Iteration 2 - 2026-01-25\n\nDone\n")
+
+        result = runner.invoke(cli, [
+            "status",
+            "--prd", str(prd_file),
+            "--progress", str(progress_file),
+            "--json",
+        ])
+        assert result.exit_code == 0  # COMPLETE status
+
+        output = json.loads(result.output)
+        assert output["tasks"]["completed"] == 2
+        assert output["tasks"]["total"] == 2
+        assert output["iterations"] == 2
+        assert output["status"] == "complete"
+        assert output["next_task"] is None
+
+    def test_json_output_no_progress_file(self, tmp_path):
+        """Test JSON output when progress file doesn't exist."""
+        import json
+
+        runner = CliRunner()
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+
+        result = runner.invoke(cli, [
+            "status",
+            "--prd", str(prd_file),
+            "--progress", str(tmp_path / "nonexistent.txt"),
+            "--json",
+        ])
+        assert result.exit_code == 1
+
+        output = json.loads(result.output)
+        assert output["iterations"] == 0
+        assert output["status"] == "in_progress"
+
+    def test_json_output_includes_line_numbers(self, tmp_path):
+        """Test that JSON output includes task line numbers."""
+        import json
+
+        runner = CliRunner()
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n\n## Tasks\n- [ ] Task 1\n- [ ] Task 2")
+
+        result = runner.invoke(cli, [
+            "status",
+            "--prd", str(prd_file),
+            "--progress", str(tmp_path / "progress.txt"),
+            "--json",
+        ])
+
+        output = json.loads(result.output)
+        assert output["tasks"]["items"][0]["line_number"] == 4
+        assert output["tasks"]["items"][1]["line_number"] == 5
+
+
+class TestFormatDuration:
+    """Tests for format_duration function."""
+
+    def test_format_duration_seconds_only(self):
+        """Test formatting durations under 60 seconds."""
+        assert format_duration(0.0) == "0.0s"
+        assert format_duration(5.5) == "5.5s"
+        assert format_duration(30.123) == "30.1s"
+        assert format_duration(59.9) == "59.9s"
+
+    def test_format_duration_with_minutes(self):
+        """Test formatting durations of 60 seconds or more."""
+        assert format_duration(60.0) == "1m 0.0s"
+        assert format_duration(90.5) == "1m 30.5s"
+        assert format_duration(125.7) == "2m 5.7s"
+        assert format_duration(3661.2) == "61m 1.2s"
+
+    def test_format_duration_exact_minute(self):
+        """Test formatting exact minute durations."""
+        assert format_duration(120.0) == "2m 0.0s"
+        assert format_duration(300.0) == "5m 0.0s"
+
+
+class TestVerboseModeTiming:
+    """Tests for elapsed time and iteration timing in verbose mode."""
+
+    def test_start_time_initialized_on_run(self, tmp_path):
+        """Test that start_time is initialized when run() is called."""
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [x] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(prd_path=prd_file, progress_path=progress_file)
+        assert runner.start_time is None
+
+        runner.run()
+        assert runner.start_time is not None
+
+    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.time.time")
+    def test_verbose_shows_elapsed_time(self, mock_time, mock_invoke, tmp_path, capsys):
+        """Test that verbose mode displays elapsed time."""
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1\n- [x] Task 2")
+        progress_file = tmp_path / "progress.txt"
+
+        # Mock time: start at 1000, then 1000 (first time.time call for start),
+        # iteration_start at 1005, elapsed check at 1010, iteration end at 1015
+        mock_time.side_effect = [1000.0, 1005.0, 1010.0, 1015.0, 1020.0]
+        mock_invoke.return_value = (0, "Task completed")
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            verbose=True,
+            max_iterations=1,
+            delay=0,
+            auto_commit=False,
+        )
+        runner.run()
+
+        captured = capsys.readouterr()
+        assert "Elapsed time:" in captured.err
+
+    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.time.time")
+    def test_verbose_shows_iteration_timing(self, mock_time, mock_invoke, tmp_path, capsys):
+        """Test that verbose mode displays iteration timing."""
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        # Mock time for iteration duration calculation
+        mock_time.side_effect = [1000.0, 1005.0, 1010.0, 1015.0, 1020.0, 1025.0]
+        mock_invoke.return_value = (0, "Task completed")
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            verbose=True,
+            max_iterations=1,
+            delay=0,
+            auto_commit=False,
+        )
+        runner.run()
+
+        captured = capsys.readouterr()
+        assert "Iteration 1 completed in" in captured.err
+
+    def test_no_timing_in_non_verbose_mode(self, tmp_path, capsys):
+        """Test that timing info is not shown without verbose mode."""
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [x] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            verbose=False,
+        )
+        runner.run()
+
+        captured = capsys.readouterr()
+        assert "Elapsed time:" not in captured.err
+        assert "completed in" not in captured.err
+
+
+class TestVerboseCLI:
+    """Tests for verbose CLI option."""
+
+    def test_verbose_flag_in_help(self):
+        """Test that -v/--verbose flag appears in CLI help."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["run", "--help"])
+        assert result.exit_code == 0
+        assert "--verbose" in result.output
+        assert "-v" in result.output
+
+
+class TestSummaryStatistics:
+    """Tests for summary statistics at end of run."""
+
+    def test_stats_initialized(self, tmp_path):
+        """Test that stats are initialized properly."""
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(prd_path=prd_file, progress_path=progress_file)
+        assert runner.stats_iterations == 0
+        assert runner.stats_successes == 0
+        assert runner.stats_failures == 0
+        assert runner.stats_tasks_completed_start == 0
+        assert runner.stats_tasks_completed_end == 0
+        assert runner.stats_total_tasks == 0
+
+    def test_summary_printed_on_completion(self, tmp_path, capsys):
+        """Test that summary is printed when all tasks are complete."""
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [x] Task 1\n- [x] Task 2")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(prd_path=prd_file, progress_path=progress_file)
+        exit_code = runner.run()
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "=== Summary ===" in captured.out
+        assert "Total time:" in captured.out
+        assert "Iterations:" in captured.out
+        assert "Tasks completed:" in captured.out
+
+    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.time.time")
+    def test_summary_shows_correct_stats(self, mock_time, mock_invoke, tmp_path, capsys):
+        """Test that summary shows correct statistics after iterations."""
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [x] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        # Mock time: start, then iteration timing
+        mock_time.side_effect = [1000.0, 1005.0, 1010.0, 1030.0, 1035.0]
+        mock_invoke.return_value = (0, "Task completed")
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            max_iterations=1,
+            delay=0,
+            auto_commit=False,
+        )
+        exit_code = runner.run()
+
+        # Exit code 0 because tasks are already complete
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "=== Summary ===" in captured.out
+        assert "Iterations: 0" in captured.out
+        assert "Tasks completed: 0 (1/1 total)" in captured.out
+
+    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.time.time")
+    @patch("zoyd.loop.time.sleep")
+    def test_summary_on_max_iterations(self, mock_sleep, mock_time, mock_invoke, tmp_path, capsys):
+        """Test that summary is printed when max iterations reached."""
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        mock_time.side_effect = [1000.0] + [1000.0 + i*5 for i in range(20)]
+        mock_invoke.return_value = (0, "Working on task")
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            max_iterations=2,
+            delay=0,
+            auto_commit=False,
+        )
+        exit_code = runner.run()
+
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "=== Summary ===" in captured.out
+        assert "Iterations: 2" in captured.out
+        assert "Success rate: 100.0% (2/2)" in captured.out
+
+    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.time.time")
+    @patch("zoyd.loop.time.sleep")
+    def test_summary_on_failure(self, mock_sleep, mock_time, mock_invoke, tmp_path, capsys):
+        """Test that summary is printed on consecutive failures."""
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        mock_time.side_effect = [1000.0] + [1000.0 + i*5 for i in range(20)]
+        mock_invoke.return_value = (1, "Error occurred")
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            max_iterations=10,
+            delay=0,
+            auto_commit=False,
+        )
+        exit_code = runner.run()
+
+        assert exit_code == 2
+        captured = capsys.readouterr()
+        assert "=== Summary ===" in captured.out
+        assert "Iterations: 3" in captured.out  # max_consecutive_failures
+        assert "Success rate: 0.0% (0/3)" in captured.out
+
+    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.time.time")
+    def test_summary_on_fail_fast(self, mock_time, mock_invoke, tmp_path, capsys):
+        """Test that summary is printed on fail-fast exit."""
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        mock_time.side_effect = [1000.0, 1005.0, 1010.0, 1015.0]
+        mock_invoke.return_value = (1, "Error occurred")
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            fail_fast=True,
+            delay=0,
+            auto_commit=False,
+        )
+        exit_code = runner.run()
+
+        assert exit_code == 2
+        captured = capsys.readouterr()
+        assert "=== Summary ===" in captured.out
+        assert "Iterations: 1" in captured.out
+        assert "Success rate: 0.0% (0/1)" in captured.out
+
+    def test_print_summary_method(self, tmp_path, capsys):
+        """Test print_summary method directly."""
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [x] Task 1\n- [ ] Task 2\n- [ ] Task 3")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(prd_path=prd_file, progress_path=progress_file)
+        runner.start_time = 1000.0
+        runner.stats_iterations = 5
+        runner.stats_successes = 4
+        runner.stats_failures = 1
+        runner.stats_tasks_completed_start = 1
+        runner.stats_tasks_completed_end = 3
+        runner.stats_total_tasks = 3
+
+        with patch("zoyd.loop.time.time", return_value=1065.0):  # 65 seconds later
+            runner.print_summary()
+
+        captured = capsys.readouterr()
+        assert "=== Summary ===" in captured.out
+        assert "Total time: 1m 5.0s" in captured.out
+        assert "Iterations: 5" in captured.out
+        assert "Success rate: 80.0% (4/5)" in captured.out
+        assert "Tasks completed: 2 (3/3 total)" in captured.out
+
+    def test_print_summary_no_iterations(self, tmp_path, capsys):
+        """Test print_summary when no iterations were run."""
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [x] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(prd_path=prd_file, progress_path=progress_file)
+        runner.start_time = 1000.0
+        runner.stats_iterations = 0
+        runner.stats_successes = 0
+        runner.stats_failures = 0
+        runner.stats_tasks_completed_start = 1
+        runner.stats_tasks_completed_end = 1
+        runner.stats_total_tasks = 1
+
+        with patch("zoyd.loop.time.time", return_value=1000.5):
+            runner.print_summary()
+
+        captured = capsys.readouterr()
+        assert "Success rate: N/A (no iterations run)" in captured.out

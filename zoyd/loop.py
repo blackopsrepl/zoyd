@@ -7,7 +7,6 @@ import time
 from pathlib import Path
 
 from . import prd, progress
-from .jail import Jail, JailError, create_jail, get_repo_root
 
 # Patterns that indicate Claude cannot complete a task
 CANNOT_COMPLETE_PATTERNS = [
@@ -144,7 +143,7 @@ def commit_changes(message: str, cwd: Path | None = None) -> tuple[bool, str]:
 
     Args:
         message: The commit message.
-        cwd: Working directory (typically the jail worktree).
+        cwd: Working directory.
 
     Returns:
         Tuple of (success, output).
@@ -200,7 +199,7 @@ def invoke_claude(
     Args:
         prompt: The prompt to send to Claude.
         model: Optional model to use (e.g., "opus", "sonnet").
-        cwd: Working directory for Claude (typically the jail worktree).
+        cwd: Working directory for Claude.
 
     Returns:
         Tuple of (return_code, output).
@@ -233,8 +232,24 @@ def invoke_claude(
         return 1, f"Error invoking Claude: {e}"
 
 
+def format_duration(seconds: float) -> str:
+    """Format a duration in seconds to a human-readable string.
+
+    Args:
+        seconds: Duration in seconds.
+
+    Returns:
+        Formatted string like "1m 23s" or "45.2s".
+    """
+    if seconds >= 60:
+        minutes = int(seconds // 60)
+        secs = seconds % 60
+        return f"{minutes}m {secs:.1f}s"
+    return f"{seconds:.1f}s"
+
+
 class LoopRunner:
-    """Orchestrates the Zoyd loop with jail isolation."""
+    """Orchestrates the Zoyd loop."""
 
     def __init__(
         self,
@@ -245,9 +260,9 @@ class LoopRunner:
         dry_run: bool = False,
         verbose: bool = False,
         delay: float = 1.0,
-        auto_commit: bool = False,
+        auto_commit: bool = True,
         resume: bool = False,
-        jail_dir: Path | None = None,
+        fail_fast: bool = False,
     ):
         self.prd_path = prd_path.resolve()
         self.progress_path = progress_path.resolve()
@@ -258,12 +273,18 @@ class LoopRunner:
         self.delay = delay
         self.auto_commit = auto_commit
         self.resume = resume
-        self.jail_dir = jail_dir
+        self.fail_fast = fail_fast
         self.consecutive_failures = 0
         self.max_consecutive_failures = 3
         self.base_backoff = 2.0  # Base for exponential backoff
-        self._jail: Jail | None = None
-        self._sync_succeeded = False
+        self.start_time: float | None = None  # Track run start time
+        # Statistics tracking
+        self.stats_iterations: int = 0
+        self.stats_successes: int = 0
+        self.stats_failures: int = 0
+        self.stats_tasks_completed_start: int = 0
+        self.stats_tasks_completed_end: int = 0
+        self.stats_total_tasks: int = 0
 
     def get_backoff_delay(self) -> float:
         """Calculate exponential backoff delay based on consecutive failures.
@@ -298,119 +319,86 @@ class LoopRunner:
         if self.verbose:
             print(f"[zoyd] {message}", file=sys.stderr)
 
-    def _get_jail_paths(self, jail: Jail) -> tuple[Path, Path]:
-        """Get paths to PRD and progress files within the jail.
+    def print_summary(self) -> None:
+        """Print summary statistics at end of run."""
+        print("\n=== Summary ===")
 
-        Args:
-            jail: The jail environment.
+        # Total time
+        if self.start_time:
+            total_time = time.time() - self.start_time
+            print(f"Total time: {format_duration(total_time)}")
 
-        Returns:
-            Tuple of (jail_prd_path, jail_progress_path).
-        """
-        # Calculate relative paths from source repo
-        source_repo = jail.source_repo
-        try:
-            prd_rel = self.prd_path.relative_to(source_repo)
-            progress_rel = self.progress_path.relative_to(source_repo)
-        except ValueError:
-            # Files are outside repo, use their basenames in jail root
-            prd_rel = Path(self.prd_path.name)
-            progress_rel = Path(self.progress_path.name)
+        # Iterations
+        print(f"Iterations: {self.stats_iterations}")
 
-        return jail.worktree_path / prd_rel, jail.worktree_path / progress_rel
+        # Success rate
+        total_attempts = self.stats_successes + self.stats_failures
+        if total_attempts > 0:
+            success_rate = (self.stats_successes / total_attempts) * 100
+            print(f"Success rate: {success_rate:.1f}% ({self.stats_successes}/{total_attempts})")
+        else:
+            print("Success rate: N/A (no iterations run)")
+
+        # Tasks completed
+        tasks_completed_this_run = self.stats_tasks_completed_end - self.stats_tasks_completed_start
+        print(f"Tasks completed: {tasks_completed_this_run} ({self.stats_tasks_completed_end}/{self.stats_total_tasks} total)")
 
     def run(self) -> int:
-        """Run the main loop with jail isolation.
+        """Run the main loop.
 
         Returns:
-            Exit code: 0 = all complete, 1 = max iterations, 2 = failures, 130 = interrupted, 3 = jail error
+            Exit code: 0 = all complete, 1 = max iterations, 2 = failures, 130 = interrupted
         """
-        # Set up jail (worktree isolation)
-        try:
-            source_repo = get_repo_root(self.prd_path.parent)
-        except JailError as e:
-            print(f"Error: {e}")
-            print("Zoyd requires a git repository to create isolated worktrees.")
-            return 3
+        # Track run start time
+        self.start_time = time.time()
 
-        self._jail = create_jail(source_repo, worktree_base=self.jail_dir)
-
-        try:
-            # Copy PRD and progress files into jail (handles uncommitted files)
-            self._jail.setup(copy_files=[self.prd_path, self.progress_path])
-            self.log(f"Created jail worktree at {self._jail.worktree_path}")
-            self.log(f"Jail branch: {self._jail.branch_name}")
-        except JailError as e:
-            print(f"Failed to create jail: {e}")
-            return 3
-
-        # Get paths within the jail
-        jail_prd_path, jail_progress_path = self._get_jail_paths(self._jail)
-
-        # Verify PRD exists in jail
-        if not jail_prd_path.exists():
+        # Verify PRD exists
+        if not self.prd_path.exists():
             print(f"Error: PRD file not found: {self.prd_path}")
             print("Make sure the PRD file exists before running zoyd.")
-            self._jail.teardown()
-            return 3
+            return 1
 
-        try:
-            exit_code = self._run_loop(jail_prd_path, jail_progress_path)
-        except Exception as e:
-            print(f"Unexpected error: {e}")
-            exit_code = 4
-
-        # Only teardown if sync succeeded (tracked by _sync_succeeded flag)
-        if self._sync_succeeded:
-            self.log("Tearing down jail...")
-            try:
-                self._jail.teardown()
-            except JailError as e:
-                self.log(f"Warning: Failed to clean up jail: {e}")
-        else:
-            print(f"Jail preserved for recovery: {self._jail.worktree_path}")
-            print(f"To manually sync: cd {self._jail.source_repo} && git merge {self._jail.branch_name}")
-
-        return exit_code
-
-    def _run_loop(self, jail_prd_path: Path, jail_progress_path: Path) -> int:
-        """Run the main loop inside the jail.
-
-        Args:
-            jail_prd_path: Path to PRD file in jail.
-            jail_progress_path: Path to progress file in jail.
-
-        Returns:
-            Exit code.
-        """
         # Initialize progress file (skip if resuming to preserve existing progress)
         if not self.resume:
-            progress.init_progress_file(jail_progress_path)
+            progress.init_progress_file(self.progress_path)
 
         # Get starting iteration from existing progress
-        progress_content = progress.read_progress(jail_progress_path)
+        progress_content = progress.read_progress(self.progress_path)
         iteration = progress.get_iteration_count(progress_content) + 1
 
         self.log(f"Starting at iteration {iteration}")
-        self.log(f"Working in jail: {self._jail.worktree_path}")
+
+        # Initialize statistics tracking
+        prd_content = prd.read_prd(self.prd_path)
+        tasks = prd.parse_tasks(prd_content)
+        completed, total = prd.get_completion_status(tasks)
+        self.stats_tasks_completed_start = completed
+        self.stats_total_tasks = total
 
         try:
             while iteration <= self.max_iterations:
-                # Read current state from jail
-                prd_content = prd.read_prd(jail_prd_path)
-                progress_content = progress.read_progress(jail_progress_path)
+                # Track iteration start time
+                iteration_start = time.time()
+
+                # Read current state
+                prd_content = prd.read_prd(self.prd_path)
+                progress_content = progress.read_progress(self.progress_path)
                 tasks = prd.parse_tasks(prd_content)
                 completed, total = prd.get_completion_status(tasks)
 
                 print(f"\n=== Iteration {iteration}/{self.max_iterations} ({completed}/{total} tasks) ===")
                 print(f"Rate limit: {self.get_rate_limit_status()}")
-                print(f"Jail: {self._jail.worktree_path}")
+
+                # Show elapsed time in verbose mode
+                if self.verbose and self.start_time:
+                    elapsed = time.time() - self.start_time
+                    self.log(f"Elapsed time: {format_duration(elapsed)}")
 
                 # Check if all tasks complete
                 if prd.is_all_complete(tasks):
                     print("All tasks complete!")
-                    # Sync changes back to source
-                    self._sync_jail_to_source()
+                    self.stats_tasks_completed_end = completed
+                    self.print_summary()
                     return 0
 
                 # Show next task
@@ -434,20 +422,29 @@ class LoopRunner:
                     iteration += 1
                     continue
 
-                # Invoke Claude in sandbox mode, working in jail directory
+                # Invoke Claude in sandbox mode
                 self.log("Invoking Claude in sandbox mode...")
-                return_code, output = invoke_claude(
-                    prompt, self.model, cwd=self._jail.worktree_path
-                )
+                return_code, output = invoke_claude(prompt, self.model)
 
                 if return_code != 0:
                     self.consecutive_failures += 1
+                    self.stats_failures += 1
+                    self.stats_iterations += 1
                     print(f"Claude returned error (code {return_code})")
                     if self.verbose:
                         print(output)
 
+                    # Fail-fast: exit immediately on first failure
+                    if self.fail_fast:
+                        print("Fail-fast mode: exiting on first failure")
+                        self.stats_tasks_completed_end = completed
+                        self.print_summary()
+                        return 2
+
                     if self.consecutive_failures >= self.max_consecutive_failures:
                         print(f"Too many consecutive failures ({self.consecutive_failures})")
+                        self.stats_tasks_completed_end = completed
+                        self.print_summary()
                         return 2
 
                     # Apply exponential backoff on failure
@@ -456,6 +453,8 @@ class LoopRunner:
                     time.sleep(backoff)
                 else:
                     self.consecutive_failures = 0
+                    self.stats_successes += 1
+                    self.stats_iterations += 1
                     if self.verbose:
                         print(output)
 
@@ -465,17 +464,15 @@ class LoopRunner:
                         print(f"[BLOCKED] Claude cannot complete task: {reason}")
                         self.log(f"Task blocked - detected pattern: {reason}")
                     else:
-                        # Auto-commit if enabled and iteration succeeded (in jail)
+                        # Auto-commit if enabled and iteration succeeded
                         if self.auto_commit and next_task:
                             self.log("Generating commit message...")
                             commit_msg = generate_commit_message(
                                 output, next_task.text, self.model
                             )
                             if commit_msg:
-                                self.log("Creating commit in jail...")
-                                success, commit_output = commit_changes(
-                                    commit_msg, cwd=self._jail.worktree_path
-                                )
+                                self.log("Creating commit...")
+                                success, commit_output = commit_changes(commit_msg)
                                 if success:
                                     print(f"Committed: {commit_msg.split(chr(10))[0]}")
                                 else:
@@ -483,16 +480,21 @@ class LoopRunner:
                             else:
                                 self.log("Failed to generate commit message")
 
-                # Record progress in jail (with blocked status if detected)
+                # Record progress (with blocked status if detected)
                 cannot_complete, reason = detect_cannot_complete(output)
                 progress.append_iteration(
-                    jail_progress_path,
+                    self.progress_path,
                     iteration,
                     output,
                     cannot_complete=cannot_complete,
                     cannot_complete_reason=reason,
                 )
                 self.log(f"Recorded iteration {iteration}")
+
+                # Show iteration timing in verbose mode
+                if self.verbose:
+                    iteration_duration = time.time() - iteration_start
+                    self.log(f"Iteration {iteration} completed in {format_duration(iteration_duration)}")
 
                 iteration += 1
 
@@ -501,27 +503,18 @@ class LoopRunner:
                     time.sleep(self.delay)
 
             print(f"Reached max iterations ({self.max_iterations})")
-            # Sync partial progress back to source
-            self._sync_jail_to_source()
+            # Get final task count
+            tasks = prd.parse_tasks(prd.read_prd(self.prd_path))
+            completed, _ = prd.get_completion_status(tasks)
+            self.stats_tasks_completed_end = completed
+            self.print_summary()
             return 1
 
         except KeyboardInterrupt:
             print("\nInterrupted by user")
-            # Offer to sync on interrupt
-            self._sync_jail_to_source()
+            # Get final task count
+            tasks = prd.parse_tasks(prd.read_prd(self.prd_path))
+            completed, _ = prd.get_completion_status(tasks)
+            self.stats_tasks_completed_end = completed
+            self.print_summary()
             return 130
-
-    def _sync_jail_to_source(self) -> None:
-        """Sync changes from jail worktree back to source repository."""
-        if not self._jail:
-            return
-
-        # Sync all tracked files (including PRD/progress) via git merge
-        self.log("Syncing tracked changes to source repository...")
-        success, message = self._jail.sync_to_source()
-        if success:
-            self._sync_succeeded = True
-            print(f"Synced: {message}")
-        else:
-            self._sync_succeeded = False
-            print(f"Sync failed: {message}")
