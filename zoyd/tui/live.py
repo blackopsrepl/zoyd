@@ -256,6 +256,7 @@ class LiveDisplay:
             console=self.console,
             refresh_per_second=self.refresh_per_second,
             transient=False,
+            screen=True,
         )
         self._live.__enter__()
         return self
