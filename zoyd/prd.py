@@ -13,8 +13,30 @@ class Task:
     line_number: int
 
 
+@dataclass
+class ValidationWarning:
+    """A validation warning for a PRD."""
+    line_number: int
+    line_content: str
+    message: str
+
+
 # Matches markdown checkboxes: - [ ] or - [x] or - [X]
 CHECKBOX_PATTERN = re.compile(r"^(\s*-\s*\[)([ xX])(\]\s*)(.*)$")
+
+# Patterns for detecting malformed checkboxes
+MALFORMED_CHECKBOX_PATTERNS = [
+    # Missing space inside brackets: -[] or -[x] without proper spacing
+    (re.compile(r"^\s*-\s*\[\]"), "Missing space inside checkbox brackets (should be '- [ ]')"),
+    # Extra characters inside brackets: -[xx], -[ x], -[x ], etc.
+    (re.compile(r"^\s*-\s*\[[^\]]{2,}\]"), "Invalid checkbox format (should have single space or 'x' inside)"),
+    # No space before checkbox content: - [ ]text or - [x]text
+    (re.compile(r"^\s*-\s*\[[ xX]\][^\s]"), "Missing space after checkbox (should be '- [ ] text')"),
+    # Bracket variations: -( ), -< >, etc.
+    (re.compile(r"^\s*-\s*[\(<][^\)\>]*[\)>]"), "Invalid checkbox format (use square brackets: '- [ ]')"),
+    # Missing closing bracket: - [ text or - [x text
+    (re.compile(r"^\s*-\s*\[[ xX][^\]]*$"), "Missing closing bracket in checkbox"),
+]
 
 
 def parse_tasks(content: str) -> list[Task]:
@@ -92,3 +114,58 @@ def get_next_incomplete_task(tasks: list[Task]) -> Task | None:
         if not task.complete:
             return task
     return None
+
+
+def validate_prd(content: str) -> list[ValidationWarning]:
+    """Validate PRD content for common issues.
+
+    Checks for:
+    - Malformed checkboxes (missing spaces, wrong brackets, etc.)
+    - Empty task text (checkbox with no description)
+
+    Args:
+        content: Markdown content to validate.
+
+    Returns:
+        List of ValidationWarning objects for each issue found.
+    """
+    warnings = []
+    lines = content.splitlines()
+
+    for line_number, line in enumerate(lines, start=1):
+        # Skip empty lines
+        if not line.strip():
+            continue
+
+        # Check for valid checkbox with empty text or missing space after checkbox
+        match = CHECKBOX_PATTERN.match(line)
+        if match:
+            bracket_group = match.group(3)  # Contains "]" and any trailing space
+            task_text = match.group(4).strip()
+
+            # Check if there's no space after the bracket (] immediately followed by text)
+            if bracket_group == "]" and match.group(4) and not match.group(4)[0].isspace():
+                warnings.append(ValidationWarning(
+                    line_number=line_number,
+                    line_content=line,
+                    message="Missing space after checkbox (should be '- [ ] text')",
+                ))
+            elif not task_text:
+                warnings.append(ValidationWarning(
+                    line_number=line_number,
+                    line_content=line,
+                    message="Empty task text (checkbox has no description)",
+                ))
+            continue
+
+        # Check for malformed checkbox patterns
+        for pattern, message in MALFORMED_CHECKBOX_PATTERNS:
+            if pattern.match(line):
+                warnings.append(ValidationWarning(
+                    line_number=line_number,
+                    line_content=line,
+                    message=message,
+                ))
+                break  # Only report first matching issue per line
+
+    return warnings

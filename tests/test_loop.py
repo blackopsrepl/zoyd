@@ -1106,3 +1106,67 @@ class TestInitCommand:
         assert "--force" in result.output
         assert "-f" in result.output
         assert "starter PRD.md template" in result.output
+
+
+class TestPrdValidationCLI:
+    """Tests for PRD validation in CLI."""
+
+    def test_valid_prd_no_warnings(self, tmp_path):
+        """Valid PRD should show no warnings."""
+        runner = CliRunner()
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# Project\n- [ ] Valid task\n- [x] Completed task\n")
+
+        result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--dry-run"])
+        assert "validation warnings" not in result.output.lower()
+
+    def test_empty_task_text_warning(self, tmp_path):
+        """Empty task text should show warning."""
+        runner = CliRunner()
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# Project\n- [ ]\n- [ ] Valid task\n")
+
+        result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--dry-run"])
+        assert "validation warnings" in result.output.lower()
+        assert "Empty task text" in result.output
+
+    def test_malformed_checkbox_warning(self, tmp_path):
+        """Malformed checkbox should show warning."""
+        runner = CliRunner()
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# Project\n-[]\n- [ ] Valid task\n")
+
+        result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--dry-run"])
+        assert "validation warnings" in result.output.lower()
+        assert "Missing space" in result.output
+
+    def test_multiple_warnings(self, tmp_path):
+        """Multiple issues should show multiple warnings."""
+        runner = CliRunner()
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# Project\n- [ ]\n-[]\n- [ ] Valid task\n")
+
+        result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--dry-run"])
+        assert "validation warnings" in result.output.lower()
+        assert "Empty task text" in result.output
+        assert "Missing space" in result.output
+
+    def test_warning_shows_line_number(self, tmp_path):
+        """Warnings should show line numbers."""
+        runner = CliRunner()
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# Project\n- [ ]\n")
+
+        result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--dry-run"])
+        assert "Line 2" in result.output
+
+    def test_validation_does_not_stop_execution(self, tmp_path):
+        """Validation warnings should not stop execution."""
+        runner = CliRunner()
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# Project\n- [ ]\n- [ ] Valid task\n")
+
+        result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--dry-run"])
+        # Should show warning but continue to dry run output
+        assert "validation warnings" in result.output.lower()
+        assert "DRY RUN" in result.output

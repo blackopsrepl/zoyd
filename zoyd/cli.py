@@ -133,6 +133,17 @@ def run(
     if dry_run:
         click.echo("Mode: DRY RUN")
 
+    # Validate PRD on startup
+    prd_content = prd.read_prd(prd_path)
+    warnings = prd.validate_prd(prd_content)
+    if warnings:
+        click.echo()
+        click.echo(click.style("PRD validation warnings:", fg="yellow"))
+        for warning in warnings:
+            click.echo(click.style(f"  Line {warning.line_number}: {warning.message}", fg="yellow"))
+            click.echo(click.style(f"    {warning.line_content.strip()}", fg="yellow", dim=True))
+        click.echo()
+
     # Handle resume mode
     if resume:
         if not progress_path.exists():
