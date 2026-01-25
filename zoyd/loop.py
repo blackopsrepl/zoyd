@@ -306,6 +306,30 @@ class LoopRunner:
 
         return jail.worktree_path / prd_rel, jail.worktree_path / progress_rel
 
+    def _copy_untracked_files_to_jail(self, jail_prd_path: Path, jail_progress_path: Path) -> None:
+        """Copy PRD and progress files to jail if they don't exist there.
+
+        Git worktrees only contain tracked files, so untracked files like PRD.md
+        need to be copied manually.
+
+        Args:
+            jail_prd_path: Destination path for PRD in jail.
+            jail_progress_path: Destination path for progress in jail.
+        """
+        import shutil
+
+        # Copy PRD file if it doesn't exist in jail (and paths differ)
+        if jail_prd_path != self.prd_path and not jail_prd_path.exists() and self.prd_path.exists():
+            jail_prd_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(self.prd_path, jail_prd_path)
+            self.log(f"Copied PRD to jail: {jail_prd_path}")
+
+        # Copy progress file if it doesn't exist in jail but exists in source (and paths differ)
+        if jail_progress_path != self.progress_path and not jail_progress_path.exists() and self.progress_path.exists():
+            jail_progress_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(self.progress_path, jail_progress_path)
+            self.log(f"Copied progress to jail: {jail_progress_path}")
+
     def run(self) -> int:
         """Run the main loop with jail isolation.
 
@@ -332,6 +356,9 @@ class LoopRunner:
 
         # Get paths within the jail
         jail_prd_path, jail_progress_path = self._get_jail_paths(self._jail)
+
+        # Copy untracked files (PRD, progress) to jail - worktrees only have tracked files
+        self._copy_untracked_files_to_jail(jail_prd_path, jail_progress_path)
 
         try:
             return self._run_loop(jail_prd_path, jail_progress_path)
@@ -487,7 +514,22 @@ class LoopRunner:
         if not self._jail:
             return
 
-        self.log("Syncing jail changes to source repository...")
+        import shutil
+
+        # Copy back untracked files (PRD, progress) - git merge won't include these
+        jail_prd_path, jail_progress_path = self._get_jail_paths(self._jail)
+
+        # Only copy if paths differ (avoids SameFileError in tests)
+        if jail_prd_path != self.prd_path and jail_prd_path.exists():
+            shutil.copy2(jail_prd_path, self.prd_path)
+            self.log(f"Copied PRD back from jail: {self.prd_path}")
+
+        if jail_progress_path != self.progress_path and jail_progress_path.exists():
+            shutil.copy2(jail_progress_path, self.progress_path)
+            self.log(f"Copied progress back from jail: {self.progress_path}")
+
+        # Sync tracked files via git merge
+        self.log("Syncing tracked changes to source repository...")
         success, message = self._jail.sync_to_source()
         if success:
             print(f"Synced: {message}")
