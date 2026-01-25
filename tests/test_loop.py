@@ -452,17 +452,21 @@ class TestJailCLI:
         assert "Mode: JAIL (worktree + sandbox isolation)" in result.output
 
     def test_sandbox_in_invoke_claude(self):
-        """Test that invoke_claude uses --sandbox flag."""
+        """Test that invoke_claude enables sandbox via --settings."""
         from zoyd.loop import invoke_claude
 
         with patch("zoyd.loop.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout="output", stderr="")
             invoke_claude("test prompt")
 
-            # Check that --sandbox is in the command
+            # Check that sandbox is enabled via --settings
             call_args = mock_run.call_args
             cmd = call_args[1].get("args") or call_args[0][0]
-            assert "--sandbox" in cmd
+            assert "--settings" in cmd
+            settings_idx = cmd.index("--settings")
+            settings_json = cmd[settings_idx + 1]
+            assert '"sandbox"' in settings_json
+            assert '"enabled": true' in settings_json
 
 
 class TestJailDir:

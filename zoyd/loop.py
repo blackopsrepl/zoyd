@@ -194,8 +194,9 @@ def invoke_claude(
     Returns:
         Tuple of (return_code, output).
     """
-    # Always use sandbox mode for isolation
-    cmd = ["claude", "--print", "--permission-mode", "acceptEdits", "--sandbox"]
+    # Enable sandbox mode via settings for filesystem/network isolation
+    sandbox_settings = '{"sandbox": {"enabled": true, "autoAllowBashIfSandboxed": true}}'
+    cmd = ["claude", "--print", "--permission-mode", "acceptEdits", "--settings", sandbox_settings]
 
     if model:
         cmd.extend(["--model", model])
