@@ -57,9 +57,17 @@ from zoyd.tui.spinners import (
 # Re-export live display components
 from zoyd.tui.live import LiveDisplay, create_live_display
 
+# Re-export event system
+from zoyd.tui.events import (
+    EventType,
+    EventEmitter,
+    Event,
+    EventHandler,
+    create_event_emitter,
+)
+
 # Future modules - imported when they exist
 # These will be uncommented as each module is implemented:
-# from zoyd.tui.events import EventType, EventEmitter
 # from zoyd.tui.dashboard import Dashboard
 
 __all__ = [
@@ -104,8 +112,12 @@ __all__ = [
     "get_spinner_names",
     "get_spinner_frames",
     "get_spinner_interval",
+    # Event system
+    "EventType",
+    "EventEmitter",
+    "Event",
+    "EventHandler",
+    "create_event_emitter",
     # Future exports (uncomment when modules are implemented):
-    # "EventType",
-    # "EventEmitter",
     # "Dashboard",
 ]
