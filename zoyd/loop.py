@@ -12,6 +12,7 @@ from pathlib import Path
 
 from . import prd, progress
 from .tui.console import create_console
+from .tui.events import EventEmitter, EventType
 from .tui.live import LiveDisplay, create_live_display
 
 # Patterns that indicate Claude cannot complete a task
@@ -333,6 +334,8 @@ class LoopRunner:
         self.stats_total_tasks: int = 0
         # Cost tracking
         self.stats_total_cost: float = 0.0
+        # Event emitter for TUI dashboard integration
+        self.events = EventEmitter()
 
     def get_backoff_delay(self) -> float:
         """Calculate exponential backoff delay based on consecutive failures.
@@ -401,6 +404,15 @@ class LoopRunner:
         # Track run start time
         self.start_time = time.time()
 
+        # Emit LOOP_START event
+        self.events.emit(EventType.LOOP_START, {
+            "prd_path": str(self.prd_path),
+            "progress_path": str(self.progress_path),
+            "max_iterations": self.max_iterations,
+            "model": self.model,
+            "max_cost": self.max_cost,
+        })
+
         # Verify PRD exists (before creating live display)
         if not self.prd_path.exists():
             print(f"Error: PRD file not found: {self.prd_path}")
@@ -453,6 +465,13 @@ class LoopRunner:
                     self.live.log_iteration_start(iteration, completed, total)
                     self.live.log(f"Rate limit: {self.get_rate_limit_status()}")
 
+                    # Emit ITERATION_START event
+                    self.events.emit(EventType.ITERATION_START, {
+                        "iteration": iteration,
+                        "completed": completed,
+                        "total": total,
+                    })
+
                     # Show elapsed time in verbose mode
                     if self.verbose and self.start_time:
                         elapsed = time.time() - self.start_time
@@ -462,6 +481,12 @@ class LoopRunner:
                     if prd.is_all_complete(tasks):
                         self.live.log_success("All tasks complete!")
                         self.stats_tasks_completed_end = completed
+                        self.events.emit(EventType.LOOP_END, {
+                            "status": "complete",
+                            "exit_code": 0,
+                            "iterations": self.stats_iterations,
+                            "total_cost": self.stats_total_cost,
+                        })
                         self.print_summary()
                         return 0
 
@@ -492,11 +517,33 @@ class LoopRunner:
                     if self.verbose:
                         self.live.log("[zoyd] Invoking Claude in sandbox mode...", style="dim")
 
+                    # Emit CLAUDE_INVOKE event
+                    self.events.emit(EventType.CLAUDE_INVOKE, {
+                        "iteration": iteration,
+                        "task": next_task.text if next_task else None,
+                        "model": self.model,
+                    })
+
                     track_cost = self.max_cost is not None
                     return_code, output, cost_usd = invoke_claude(
                         prompt, self.model, track_cost=track_cost
                     )
                     self.live.stop_spinner()
+
+                    # Emit CLAUDE_RESPONSE or CLAUDE_ERROR event
+                    if return_code == 0:
+                        self.events.emit(EventType.CLAUDE_RESPONSE, {
+                            "iteration": iteration,
+                            "return_code": return_code,
+                            "cost_usd": cost_usd,
+                            "output_length": len(output),
+                        })
+                    else:
+                        self.events.emit(EventType.CLAUDE_ERROR, {
+                            "iteration": iteration,
+                            "return_code": return_code,
+                            "output": output[:500],  # Truncate for event
+                        })
 
                     # Track cost if available
                     if cost_usd is not None:
@@ -505,12 +552,30 @@ class LoopRunner:
                         if self.verbose:
                             self.live.log(f"[zoyd] Iteration cost: ${cost_usd:.4f}, Total: ${self.stats_total_cost:.4f}", style="dim")
 
+                        # Emit COST_UPDATE event
+                        self.events.emit(EventType.COST_UPDATE, {
+                            "iteration_cost": cost_usd,
+                            "total_cost": self.stats_total_cost,
+                            "max_cost": self.max_cost,
+                        })
+
                         # Check if we've exceeded max cost
                         if self.max_cost is not None and self.stats_total_cost >= self.max_cost:
                             self.live.log_error(f"Cost limit exceeded: ${self.stats_total_cost:.4f} >= ${self.max_cost:.2f}")
+                            # Emit COST_LIMIT_EXCEEDED event
+                            self.events.emit(EventType.COST_LIMIT_EXCEEDED, {
+                                "total_cost": self.stats_total_cost,
+                                "max_cost": self.max_cost,
+                            })
                             self.stats_tasks_completed_end = completed
                             self.stats_iterations += 1
                             self.stats_successes += 1
+                            self.events.emit(EventType.LOOP_END, {
+                                "status": "cost_limit",
+                                "exit_code": 4,
+                                "iterations": self.stats_iterations,
+                                "total_cost": self.stats_total_cost,
+                            })
                             self.print_summary()
                             return 4  # Exit code 4 for cost limit exceeded
 
@@ -526,12 +591,24 @@ class LoopRunner:
                         if self.fail_fast:
                             self.live.log_error("Fail-fast mode: exiting on first failure")
                             self.stats_tasks_completed_end = completed
+                            self.events.emit(EventType.LOOP_END, {
+                                "status": "fail_fast",
+                                "exit_code": 2,
+                                "iterations": self.stats_iterations,
+                                "total_cost": self.stats_total_cost,
+                            })
                             self.print_summary()
                             return 2
 
                         if self.consecutive_failures >= self.max_consecutive_failures:
                             self.live.log_error(f"Too many consecutive failures ({self.consecutive_failures})")
                             self.stats_tasks_completed_end = completed
+                            self.events.emit(EventType.LOOP_END, {
+                                "status": "max_failures",
+                                "exit_code": 2,
+                                "iterations": self.stats_iterations,
+                                "total_cost": self.stats_total_cost,
+                            })
                             self.print_summary()
                             return 2
 
@@ -553,6 +630,12 @@ class LoopRunner:
                             self.live.log_warning(f"[BLOCKED] Claude cannot complete task: {reason}")
                             if self.verbose:
                                 self.live.log(f"[zoyd] Task blocked - detected pattern: {reason}", style="dim")
+                            # Emit TASK_BLOCKED event
+                            self.events.emit(EventType.TASK_BLOCKED, {
+                                "iteration": iteration,
+                                "task": next_task.text if next_task else None,
+                                "reason": reason,
+                            })
                         else:
                             # Auto-commit if enabled and iteration succeeded
                             if self.auto_commit and next_task:
@@ -564,11 +647,34 @@ class LoopRunner:
                                 if commit_msg:
                                     if self.verbose:
                                         self.live.log("[zoyd] Creating commit...", style="dim")
+                                    # Emit COMMIT_START event
+                                    self.events.emit(EventType.COMMIT_START, {
+                                        "iteration": iteration,
+                                        "task": next_task.text,
+                                        "message": commit_msg.split("\n")[0],
+                                    })
                                     success, commit_output = commit_changes(commit_msg)
                                     if success:
                                         self.live.log_success(f"Committed: {commit_msg.split(chr(10))[0]}")
-                                    elif self.verbose:
-                                        self.live.log(f"[zoyd] Commit failed: {commit_output}", style="dim")
+                                        # Emit COMMIT_SUCCESS event
+                                        self.events.emit(EventType.COMMIT_SUCCESS, {
+                                            "iteration": iteration,
+                                            "message": commit_msg.split("\n")[0],
+                                        })
+                                        # Emit TASK_COMPLETE event on successful commit
+                                        self.events.emit(EventType.TASK_COMPLETE, {
+                                            "iteration": iteration,
+                                            "task": next_task.text,
+                                        })
+                                    else:
+                                        if self.verbose:
+                                            self.live.log(f"[zoyd] Commit failed: {commit_output}", style="dim")
+                                        # Emit COMMIT_FAILED event
+                                        self.events.emit(EventType.COMMIT_FAILED, {
+                                            "iteration": iteration,
+                                            "message": commit_msg.split("\n")[0],
+                                            "error": commit_output,
+                                        })
                                 elif self.verbose:
                                     self.live.log("[zoyd] Failed to generate commit message", style="dim")
 
@@ -585,9 +691,17 @@ class LoopRunner:
                         self.live.log(f"[zoyd] Recorded iteration {iteration}", style="dim")
 
                     # Show iteration timing in verbose mode
+                    iteration_duration = time.time() - iteration_start
                     if self.verbose:
-                        iteration_duration = time.time() - iteration_start
                         self.live.log(f"[zoyd] Iteration {iteration} completed in {format_duration(iteration_duration)}", style="dim")
+
+                    # Emit ITERATION_END event
+                    self.events.emit(EventType.ITERATION_END, {
+                        "iteration": iteration,
+                        "duration": iteration_duration,
+                        "success": return_code == 0,
+                        "cost_usd": cost_usd,
+                    })
 
                     iteration += 1
                     self.live.set_task(None)
@@ -601,6 +715,12 @@ class LoopRunner:
                 tasks = prd.parse_tasks(prd.read_prd(self.prd_path))
                 completed, _ = prd.get_completion_status(tasks)
                 self.stats_tasks_completed_end = completed
+                self.events.emit(EventType.LOOP_END, {
+                    "status": "max_iterations",
+                    "exit_code": 1,
+                    "iterations": self.stats_iterations,
+                    "total_cost": self.stats_total_cost,
+                })
                 self.print_summary()
                 return 1
 
@@ -610,5 +730,11 @@ class LoopRunner:
                 tasks = prd.parse_tasks(prd.read_prd(self.prd_path))
                 completed, _ = prd.get_completion_status(tasks)
                 self.stats_tasks_completed_end = completed
+                self.events.emit(EventType.LOOP_END, {
+                    "status": "interrupted",
+                    "exit_code": 130,
+                    "iterations": self.stats_iterations,
+                    "total_cost": self.stats_total_cost,
+                })
                 self.print_summary()
                 return 130

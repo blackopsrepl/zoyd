@@ -1449,3 +1449,487 @@ class TestInvokeClaudeCostTracking:
         assert return_code == 0
         assert output == "done"
         assert cost is None
+
+
+class TestLoopRunnerEvents:
+    """Tests for LoopRunner event emission."""
+
+    def test_events_attribute_exists(self, tmp_path):
+        """Test that LoopRunner has an events attribute."""
+        from zoyd.tui.events import EventEmitter
+
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(prd_path=prd_file, progress_path=progress_file)
+        assert hasattr(runner, "events")
+        assert isinstance(runner.events, EventEmitter)
+
+    def test_loop_start_event_emitted(self, tmp_path):
+        """Test that LOOP_START event is emitted at start of run."""
+        from zoyd.tui.events import EventType
+
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [x] Task 1")  # All complete
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(prd_path=prd_file, progress_path=progress_file)
+
+        received_events = []
+        runner.events.on(EventType.LOOP_START, lambda e: received_events.append(e))
+
+        runner.run()
+
+        assert len(received_events) == 1
+        assert received_events[0].type == EventType.LOOP_START
+        assert "prd_path" in received_events[0].data
+        assert "max_iterations" in received_events[0].data
+
+    def test_loop_end_event_on_complete(self, tmp_path):
+        """Test that LOOP_END event is emitted when all tasks complete."""
+        from zoyd.tui.events import EventType
+
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [x] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(prd_path=prd_file, progress_path=progress_file)
+
+        received_events = []
+        runner.events.on(EventType.LOOP_END, lambda e: received_events.append(e))
+
+        runner.run()
+
+        assert len(received_events) == 1
+        assert received_events[0].data.get("status") == "complete"
+        assert received_events[0].data.get("exit_code") == 0
+
+    @patch("zoyd.loop.invoke_claude")
+    def test_iteration_start_event_emitted(self, mock_invoke, tmp_path):
+        """Test that ITERATION_START event is emitted at start of each iteration."""
+        from zoyd.tui.events import EventType
+
+        mock_invoke.return_value = (0, "done", None)
+
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            max_iterations=1,
+            auto_commit=False,
+        )
+
+        received_events = []
+        runner.events.on(EventType.ITERATION_START, lambda e: received_events.append(e))
+
+        runner.run()
+
+        assert len(received_events) == 1
+        assert received_events[0].data.get("iteration") == 1
+        assert "completed" in received_events[0].data
+        assert "total" in received_events[0].data
+
+    @patch("zoyd.loop.invoke_claude")
+    def test_iteration_end_event_emitted(self, mock_invoke, tmp_path):
+        """Test that ITERATION_END event is emitted at end of each iteration."""
+        from zoyd.tui.events import EventType
+
+        mock_invoke.return_value = (0, "done", None)
+
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            max_iterations=1,
+            auto_commit=False,
+        )
+
+        received_events = []
+        runner.events.on(EventType.ITERATION_END, lambda e: received_events.append(e))
+
+        runner.run()
+
+        assert len(received_events) == 1
+        assert received_events[0].data.get("iteration") == 1
+        assert "duration" in received_events[0].data
+        assert "success" in received_events[0].data
+
+    @patch("zoyd.loop.invoke_claude")
+    def test_claude_invoke_event_emitted(self, mock_invoke, tmp_path):
+        """Test that CLAUDE_INVOKE event is emitted before invoking Claude."""
+        from zoyd.tui.events import EventType
+
+        mock_invoke.return_value = (0, "done", None)
+
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            max_iterations=1,
+            auto_commit=False,
+        )
+
+        received_events = []
+        runner.events.on(EventType.CLAUDE_INVOKE, lambda e: received_events.append(e))
+
+        runner.run()
+
+        assert len(received_events) == 1
+        assert received_events[0].data.get("iteration") == 1
+        assert "task" in received_events[0].data
+
+    @patch("zoyd.loop.invoke_claude")
+    def test_claude_response_event_on_success(self, mock_invoke, tmp_path):
+        """Test that CLAUDE_RESPONSE event is emitted on successful invocation."""
+        from zoyd.tui.events import EventType
+
+        mock_invoke.return_value = (0, "done", 0.05)
+
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            max_iterations=1,
+            auto_commit=False,
+            max_cost=1.0,  # Enable cost tracking
+        )
+
+        received_events = []
+        runner.events.on(EventType.CLAUDE_RESPONSE, lambda e: received_events.append(e))
+
+        runner.run()
+
+        assert len(received_events) == 1
+        assert received_events[0].data.get("return_code") == 0
+        assert received_events[0].data.get("cost_usd") == 0.05
+
+    @patch("zoyd.loop.invoke_claude")
+    def test_claude_error_event_on_failure(self, mock_invoke, tmp_path):
+        """Test that CLAUDE_ERROR event is emitted on failed invocation."""
+        from zoyd.tui.events import EventType
+
+        mock_invoke.return_value = (1, "Error occurred", None)
+
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            max_iterations=1,
+            fail_fast=True,
+            auto_commit=False,
+        )
+
+        received_events = []
+        runner.events.on(EventType.CLAUDE_ERROR, lambda e: received_events.append(e))
+
+        runner.run()
+
+        assert len(received_events) == 1
+        assert received_events[0].data.get("return_code") == 1
+        assert "output" in received_events[0].data
+
+    @patch("zoyd.loop.invoke_claude")
+    def test_task_blocked_event_emitted(self, mock_invoke, tmp_path):
+        """Test that TASK_BLOCKED event is emitted when Claude can't complete task."""
+        from zoyd.tui.events import EventType
+
+        mock_invoke.return_value = (0, "I cannot complete this task because of X", None)
+
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            max_iterations=1,
+            auto_commit=False,
+        )
+
+        received_events = []
+        runner.events.on(EventType.TASK_BLOCKED, lambda e: received_events.append(e))
+
+        runner.run()
+
+        assert len(received_events) == 1
+        assert "task" in received_events[0].data
+        assert "reason" in received_events[0].data
+
+    @patch("zoyd.loop.invoke_claude")
+    def test_cost_update_event_emitted(self, mock_invoke, tmp_path):
+        """Test that COST_UPDATE event is emitted when cost is tracked."""
+        from zoyd.tui.events import EventType
+
+        mock_invoke.return_value = (0, "done", 0.05)
+
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            max_iterations=1,
+            max_cost=1.0,
+            auto_commit=False,
+        )
+
+        received_events = []
+        runner.events.on(EventType.COST_UPDATE, lambda e: received_events.append(e))
+
+        runner.run()
+
+        assert len(received_events) == 1
+        assert received_events[0].data.get("iteration_cost") == 0.05
+        assert received_events[0].data.get("total_cost") == 0.05
+        assert received_events[0].data.get("max_cost") == 1.0
+
+    @patch("zoyd.loop.invoke_claude")
+    def test_cost_limit_exceeded_event_emitted(self, mock_invoke, tmp_path):
+        """Test that COST_LIMIT_EXCEEDED event is emitted when cost exceeds max."""
+        from zoyd.tui.events import EventType
+
+        mock_invoke.return_value = (0, "done", 0.10)
+
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            max_iterations=10,
+            max_cost=0.05,  # Lower than iteration cost
+            auto_commit=False,
+        )
+
+        received_events = []
+        runner.events.on(EventType.COST_LIMIT_EXCEEDED, lambda e: received_events.append(e))
+
+        exit_code = runner.run()
+
+        assert exit_code == 4
+        assert len(received_events) == 1
+        assert received_events[0].data.get("total_cost") == 0.10
+        assert received_events[0].data.get("max_cost") == 0.05
+
+    @patch("zoyd.loop.commit_changes")
+    @patch("zoyd.loop.generate_commit_message")
+    @patch("zoyd.loop.invoke_claude")
+    def test_commit_events_emitted(self, mock_invoke, mock_gen_msg, mock_commit, tmp_path):
+        """Test that commit events are emitted during auto-commit."""
+        from zoyd.tui.events import EventType
+
+        mock_invoke.return_value = (0, "done", None)
+        mock_gen_msg.return_value = "feat: add feature"
+        mock_commit.return_value = (True, "commit success")
+
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            max_iterations=1,
+            auto_commit=True,
+        )
+
+        start_events = []
+        success_events = []
+        runner.events.on(EventType.COMMIT_START, lambda e: start_events.append(e))
+        runner.events.on(EventType.COMMIT_SUCCESS, lambda e: success_events.append(e))
+
+        runner.run()
+
+        assert len(start_events) == 1
+        assert start_events[0].data.get("message") == "feat: add feature"
+        assert len(success_events) == 1
+
+    @patch("zoyd.loop.commit_changes")
+    @patch("zoyd.loop.generate_commit_message")
+    @patch("zoyd.loop.invoke_claude")
+    def test_commit_failed_event_emitted(self, mock_invoke, mock_gen_msg, mock_commit, tmp_path):
+        """Test that COMMIT_FAILED event is emitted when commit fails."""
+        from zoyd.tui.events import EventType
+
+        mock_invoke.return_value = (0, "done", None)
+        mock_gen_msg.return_value = "feat: add feature"
+        mock_commit.return_value = (False, "commit failed")
+
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            max_iterations=1,
+            auto_commit=True,
+        )
+
+        failed_events = []
+        runner.events.on(EventType.COMMIT_FAILED, lambda e: failed_events.append(e))
+
+        runner.run()
+
+        assert len(failed_events) == 1
+        assert "error" in failed_events[0].data
+
+    @patch("zoyd.loop.commit_changes")
+    @patch("zoyd.loop.generate_commit_message")
+    @patch("zoyd.loop.invoke_claude")
+    def test_task_complete_event_on_successful_commit(self, mock_invoke, mock_gen_msg, mock_commit, tmp_path):
+        """Test that TASK_COMPLETE event is emitted on successful commit."""
+        from zoyd.tui.events import EventType
+
+        mock_invoke.return_value = (0, "done", None)
+        mock_gen_msg.return_value = "feat: add feature"
+        mock_commit.return_value = (True, "commit success")
+
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            max_iterations=1,
+            auto_commit=True,
+        )
+
+        complete_events = []
+        runner.events.on(EventType.TASK_COMPLETE, lambda e: complete_events.append(e))
+
+        runner.run()
+
+        assert len(complete_events) == 1
+        assert complete_events[0].data.get("task") == "Task 1"
+
+    def test_loop_end_event_on_max_iterations(self, tmp_path):
+        """Test LOOP_END event with max_iterations status."""
+        from zoyd.tui.events import EventType
+
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            max_iterations=0,  # Immediate max
+            auto_commit=False,
+        )
+
+        received_events = []
+        runner.events.on(EventType.LOOP_END, lambda e: received_events.append(e))
+
+        exit_code = runner.run()
+
+        assert exit_code == 1
+        assert len(received_events) == 1
+        assert received_events[0].data.get("status") == "max_iterations"
+        assert received_events[0].data.get("exit_code") == 1
+
+    @patch("zoyd.loop.invoke_claude")
+    def test_loop_end_event_on_fail_fast(self, mock_invoke, tmp_path):
+        """Test LOOP_END event with fail_fast status."""
+        from zoyd.tui.events import EventType
+
+        mock_invoke.return_value = (1, "error", None)
+
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            max_iterations=10,
+            fail_fast=True,
+            auto_commit=False,
+        )
+
+        received_events = []
+        runner.events.on(EventType.LOOP_END, lambda e: received_events.append(e))
+
+        exit_code = runner.run()
+
+        assert exit_code == 2
+        assert len(received_events) == 1
+        assert received_events[0].data.get("status") == "fail_fast"
+
+    @patch("zoyd.loop.invoke_claude")
+    def test_loop_end_event_on_max_failures(self, mock_invoke, tmp_path):
+        """Test LOOP_END event with max_failures status."""
+        from zoyd.tui.events import EventType
+
+        mock_invoke.return_value = (1, "error", None)
+
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            max_iterations=10,
+            auto_commit=False,
+        )
+
+        received_events = []
+        runner.events.on(EventType.LOOP_END, lambda e: received_events.append(e))
+
+        exit_code = runner.run()
+
+        assert exit_code == 2
+        assert len(received_events) == 1
+        assert received_events[0].data.get("status") == "max_failures"
+
+    @patch("zoyd.loop.invoke_claude")
+    def test_multiple_iterations_emit_multiple_events(self, mock_invoke, tmp_path):
+        """Test that multiple iterations emit events for each iteration."""
+        from zoyd.tui.events import EventType
+
+        mock_invoke.return_value = (0, "done", None)
+
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            max_iterations=3,
+            auto_commit=False,
+            delay=0,
+        )
+
+        start_events = []
+        end_events = []
+        runner.events.on(EventType.ITERATION_START, lambda e: start_events.append(e))
+        runner.events.on(EventType.ITERATION_END, lambda e: end_events.append(e))
+
+        runner.run()
+
+        assert len(start_events) == 3
+        assert len(end_events) == 3
+        # Verify iteration numbers
+        assert [e.data.get("iteration") for e in start_events] == [1, 2, 3]
+        assert [e.data.get("iteration") for e in end_events] == [1, 2, 3]
