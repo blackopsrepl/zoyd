@@ -94,13 +94,13 @@ def cli():
 @click.option(
     "--no-tui",
     is_flag=True,
-    default=False,
+    default=None,
     help="Disable Rich TUI and use plain text output",
 )
 @click.option(
     "--fullscreen",
     is_flag=True,
-    default=False,
+    default=None,
     help="Enable fullscreen dashboard mode with rich layout",
 )
 @click.pass_context
@@ -117,8 +117,8 @@ def run(
     resume: bool,
     fail_fast: bool | None,
     max_cost: float | None,
-    no_tui: bool,
-    fullscreen: bool,
+    no_tui: bool | None,
+    fullscreen: bool | None,
 ):
     """Run the Zoyd loop against a PRD file.
 
@@ -153,6 +153,16 @@ def run(
     if max_cost is None:
         max_cost = config.max_cost
 
+    # Apply TUI config defaults where CLI options weren't provided
+    # no_tui flag inverts the tui_enabled config option
+    if no_tui is None:
+        no_tui = not config.tui_enabled
+    if fullscreen is None:
+        fullscreen = config.tui_fullscreen
+    # TUI refresh rate and compact mode always come from config (no CLI flags)
+    tui_refresh_rate = config.tui_refresh_rate
+    tui_compact = config.tui_compact
+
     # Handle resume mode validation
     if resume and not progress_path.exists():
         click.echo(f"Error: Cannot resume - progress file '{progress_path}' does not exist", err=True)
@@ -172,6 +182,8 @@ def run(
         max_cost=max_cost,
         tui_enabled=not no_tui,
         fullscreen=fullscreen,
+        tui_refresh_rate=tui_refresh_rate,
+        tui_compact=tui_compact,
     )
 
     exit_code = runner.run()

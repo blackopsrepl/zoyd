@@ -42,6 +42,7 @@ class LiveDisplay:
         model: str | None = None,
         max_cost: float | None = None,
         max_log_lines: int = 20,
+        refresh_per_second: int = 4,
     ) -> None:
         """Initialize the live display.
 
@@ -53,6 +54,7 @@ class LiveDisplay:
             model: Claude model being used.
             max_cost: Maximum cost limit in USD.
             max_log_lines: Maximum number of log lines to show.
+            refresh_per_second: How often to refresh the display.
         """
         self.console = console
         self.prd_path = prd_path
@@ -61,6 +63,7 @@ class LiveDisplay:
         self.model = model
         self.max_cost = max_cost
         self.max_log_lines = max_log_lines
+        self.refresh_per_second = refresh_per_second
 
         # State
         self._iteration = 0
@@ -251,7 +254,7 @@ class LiveDisplay:
         self._live = Live(
             self._render(),
             console=self.console,
-            refresh_per_second=4,
+            refresh_per_second=self.refresh_per_second,
             transient=False,
         )
         self._live.__enter__()
@@ -421,6 +424,7 @@ def create_live_display(
     model: str | None = None,
     max_cost: float | None = None,
     max_log_lines: int = 20,
+    refresh_per_second: int = 4,
 ) -> LiveDisplay:
     """Create a live display instance.
 
@@ -434,6 +438,7 @@ def create_live_display(
         model: Claude model being used.
         max_cost: Maximum cost limit in USD.
         max_log_lines: Maximum number of log lines to show.
+        refresh_per_second: How often to refresh the display.
 
     Returns:
         A configured LiveDisplay instance.
@@ -446,6 +451,7 @@ def create_live_display(
         model=model,
         max_cost=max_cost,
         max_log_lines=max_log_lines,
+        refresh_per_second=refresh_per_second,
     )
 
 

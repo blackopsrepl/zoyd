@@ -2443,3 +2443,91 @@ class TestCreateDashboardDisplay:
         assert display.max_iterations == 20
         assert display.model == "sonnet"
         assert display.max_cost == 10.0
+
+
+class TestTUIConfigOptionsLoopRunner:
+    """Tests for TUI config options (tui_refresh_rate, tui_compact) in LoopRunner."""
+
+    def test_tui_refresh_rate_default(self, tmp_path):
+        """Test that tui_refresh_rate has a default of 4.0."""
+        prd = tmp_path / "PRD.md"
+        prd.write_text("# Tasks\n- [ ] Test task")
+        runner = LoopRunner(prd_path=prd, progress_path=tmp_path / "progress.txt")
+        assert runner.tui_refresh_rate == 4.0
+
+    def test_tui_refresh_rate_can_be_set(self, tmp_path):
+        """Test that tui_refresh_rate can be customized."""
+        prd = tmp_path / "PRD.md"
+        prd.write_text("# Tasks\n- [ ] Test task")
+        runner = LoopRunner(
+            prd_path=prd, progress_path=tmp_path / "progress.txt", tui_refresh_rate=10.0
+        )
+        assert runner.tui_refresh_rate == 10.0
+
+    def test_tui_compact_default(self, tmp_path):
+        """Test that tui_compact has a default of False."""
+        prd = tmp_path / "PRD.md"
+        prd.write_text("# Tasks\n- [ ] Test task")
+        runner = LoopRunner(prd_path=prd, progress_path=tmp_path / "progress.txt")
+        assert runner.tui_compact is False
+
+    def test_tui_compact_can_be_set(self, tmp_path):
+        """Test that tui_compact can be enabled."""
+        prd = tmp_path / "PRD.md"
+        prd.write_text("# Tasks\n- [ ] Test task")
+        runner = LoopRunner(
+            prd_path=prd, progress_path=tmp_path / "progress.txt", tui_compact=True
+        )
+        assert runner.tui_compact is True
+
+    def test_tui_refresh_rate_passed_to_dashboard_display(self, tmp_path):
+        """Test that tui_refresh_rate is passed to DashboardDisplay."""
+        rich = pytest.importorskip("rich")
+        from zoyd.tui.live import DashboardDisplay
+
+        prd = tmp_path / "PRD.md"
+        prd.write_text("# Tasks\n- [ ] Test task")
+        runner = LoopRunner(
+            prd_path=prd,
+            progress_path=tmp_path / "progress.txt",
+            fullscreen=True,
+            tui_refresh_rate=8.0,
+        )
+        assert isinstance(runner.live, DashboardDisplay)
+        # The dashboard stores refresh_per_second internally
+        assert runner.live._dashboard.refresh_per_second == 8
+
+    def test_tui_compact_passed_to_dashboard_display(self, tmp_path):
+        """Test that tui_compact is passed to DashboardDisplay."""
+        rich = pytest.importorskip("rich")
+        from zoyd.tui.live import DashboardDisplay
+
+        prd = tmp_path / "PRD.md"
+        prd.write_text("# Tasks\n- [ ] Test task")
+        runner = LoopRunner(
+            prd_path=prd,
+            progress_path=tmp_path / "progress.txt",
+            fullscreen=True,
+            tui_compact=True,
+        )
+        assert isinstance(runner.live, DashboardDisplay)
+        # The dashboard stores compact flag internally
+        assert runner.live._dashboard.compact is True
+
+    def test_tui_refresh_rate_passed_to_live_display(self, tmp_path):
+        """Test that tui_refresh_rate is passed to LiveDisplay."""
+        rich = pytest.importorskip("rich")
+        from zoyd.tui.live import LiveDisplay
+
+        prd = tmp_path / "PRD.md"
+        prd.write_text("# Tasks\n- [ ] Test task")
+        runner = LoopRunner(
+            prd_path=prd,
+            progress_path=tmp_path / "progress.txt",
+            tui_enabled=True,
+            fullscreen=False,
+            tui_refresh_rate=12.0,
+        )
+        assert isinstance(runner.live, LiveDisplay)
+        # LiveDisplay stores refresh_per_second
+        assert runner.live.refresh_per_second == 12
