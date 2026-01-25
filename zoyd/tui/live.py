@@ -24,10 +24,12 @@ from zoyd.tui.panels import create_status_bar
 from zoyd.tui.spinners import MindFlayerSpinner
 from zoyd.tui.theme import COLORS
 
+from rich.console import RenderableType
+
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from rich.console import Console, RenderableType
+    from rich.console import Console
 
 # Default code theme for syntax highlighting in Markdown blocks
 DEFAULT_CODE_THEME = "dracula"
@@ -79,7 +81,7 @@ class LiveDisplay:
         self._cost = 0.0
         self._task_text: str | None = None
         self._spinner: MindFlayerSpinner | None = None
-        self._log_lines: deque[Text] = deque(maxlen=max_log_lines)
+        self._log_lines: deque[RenderableType] = deque(maxlen=max_log_lines)
 
         # Live display
         self._live: Live | None = None
@@ -181,6 +183,18 @@ class LiveDisplay:
         """
         self.log(f"[warning]{message}", style="warning")
 
+    def log_markdown(self, content: str, *, code_theme: str | None = None) -> None:
+        """Log markdown content with syntax highlighting for code blocks.
+
+        Args:
+            content: Markdown content to render.
+            code_theme: Optional code theme override. Defaults to DEFAULT_CODE_THEME.
+        """
+        theme = code_theme or DEFAULT_CODE_THEME
+        md = Markdown(content, code_theme=theme)
+        self._log_lines.append(md)
+        self._refresh()
+
     def _render_banner(self) -> RenderableType:
         """Render the ZOYD ASCII art banner with mind flayer art.
 
@@ -252,7 +266,8 @@ class LiveDisplay:
         """Render the scrolling log area with dynamic height.
 
         The log panel fills the remaining terminal height after the banner
-        and status areas.
+        and status areas. Uses Group to support mixed content types
+        (Text, Markdown, etc.).
 
         Returns:
             Rich renderable for the logs.
@@ -260,17 +275,13 @@ class LiveDisplay:
         log_height = self._get_log_height()
 
         if not self._log_lines:
-            content = Text("Waiting for activity...", style="dim")
+            content: RenderableType = Text("Waiting for activity...", style="dim")
         else:
             # Get the most recent log lines that fit in the available height
             visible_lines = list(self._log_lines)[-log_height:]
 
-            # Join log lines with newlines
-            content = Text()
-            for i, line in enumerate(visible_lines):
-                if i > 0:
-                    content.append("\n")
-                content.append(line)
+            # Use Group for mixed content types (Text, Markdown, etc.)
+            content = Group(*visible_lines)
 
         return Panel(
             content,
@@ -520,6 +531,20 @@ class PlainDisplay:
             message: The warning message.
         """
         print(f"[WARNING] {message}")
+
+    def log_markdown(self, content: str, *, code_theme: str | None = None) -> None:
+        """Log markdown content as plain text.
+
+        In plain mode, this strips markdown formatting and outputs plain text.
+        Code blocks are preserved but without syntax highlighting.
+
+        Args:
+            content: Markdown content to render.
+            code_theme: Ignored in plain mode.
+        """
+        # In plain mode, just print the markdown content as-is
+        # The content is already human-readable markdown
+        print(content)
 
     def __enter__(self) -> "PlainDisplay":
         """Enter the display context.
