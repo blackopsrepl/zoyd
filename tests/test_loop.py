@@ -225,7 +225,7 @@ class TestAutoCommit:
     def test_commit_prompt_no_coauthor(self):
         """Test that commit prompt explicitly forbids Co-Author lines."""
         assert "Co-Author" in COMMIT_PROMPT_TEMPLATE
-        assert "Do NOT include" in COMMIT_PROMPT_TEMPLATE
+        assert "NO" in COMMIT_PROMPT_TEMPLATE  # "NO Co-Author..."
         assert "Co-Authored-By" in COMMIT_PROMPT_TEMPLATE
 
     @patch("zoyd.loop.subprocess.run")

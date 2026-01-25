@@ -39,14 +39,25 @@ Status: Iteration {iteration}, {completed}/{total} tasks complete
 {progress_content}
 """
 
-# Prompt template for generating commit messages (no Co-Author signature)
-COMMIT_PROMPT_TEMPLATE = """Generate a git commit message for the following changes.
+# Prompt template for generating commit messages (conventional commits, no signatures)
+COMMIT_PROMPT_TEMPLATE = """Generate a git commit message using Conventional Commits format.
 
-IMPORTANT: Do NOT include any Co-Author, Co-Authored-By, Signed-off-by, or similar signature lines.
-The commit message should be clean and contain only:
-1. A concise subject line (50 chars or less)
-2. A blank line
-3. A brief body explaining what was done (optional, 2-3 lines max)
+Format: <type>(<scope>): <description>
+
+Types:
+- feat: new feature
+- fix: bug fix
+- docs: documentation only
+- style: formatting, no code change
+- refactor: code restructuring, no feature/fix
+- test: adding/updating tests
+- chore: maintenance, build, config
+
+Rules:
+- Subject line: type(scope): description (72 chars max, lowercase)
+- Scope is optional but encouraged (e.g., feat(cli): add --json flag)
+- Body is optional, separated by blank line, explains why not what
+- NO Co-Author, Co-Authored-By, Signed-off-by, or similar signatures
 
 Changes made this iteration:
 {iteration_output}
