@@ -1408,6 +1408,7 @@ class TestMaxCostCLI:
             "--max-cost", "10.50",
             "--dry-run",
             "--no-tui",  # Use PlainDisplay for capturable output
+            "--no-session-log",  # Avoid Redis config from zoyd.toml
         ])
         # Max cost is shown in the summary at the end
         assert "Cost limit: $10.50" in result.output
@@ -2058,6 +2059,7 @@ class TestNoTuiCLI:
             "--prd", str(prd_file),
             "--no-tui",
             "--dry-run",
+            "--no-session-log",  # Avoid Redis config from zoyd.toml
         ])
         # Plain output shows "Zoyd - Autonomous Loop" instead of ASCII art
         assert "Zoyd - Autonomous Loop" in result.output
@@ -2076,6 +2078,7 @@ class TestNoTuiCLI:
             "--progress", str(progress_file),
             "--no-tui",
             "-n", "1",
+            "--no-session-log",  # Avoid Redis config from zoyd.toml
         ])
         # Should show iteration header in plain format or "All tasks complete" for completed PRD
         assert "=== Iteration" in result.output or "[SUCCESS] All tasks complete" in result.output
@@ -2094,6 +2097,7 @@ class TestNoTuiCLI:
             "--no-tui",
             "--dry-run",
             "-n", "1",
+            "--no-session-log",  # Avoid Redis config from zoyd.toml
         ])
         # Exit code 1 means max iterations reached (which is expected for dry run)
         assert result.exit_code in [0, 1]
