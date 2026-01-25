@@ -179,6 +179,85 @@ class OutputPanel:
         console.print(self.render())
 
 
+class WarningPanel:
+    """A panel for displaying warnings with yellow/amber styling.
+
+    Used for validation warnings, deprecation notices, and non-critical issues.
+    """
+
+    def __init__(
+        self,
+        title: str = "Warning",
+        *,
+        show_icon: bool = True,
+    ) -> None:
+        """Initialize the warning panel.
+
+        Args:
+            title: Title for the panel.
+            show_icon: Whether to show a warning icon in the title.
+        """
+        self.title = title
+        self.show_icon = show_icon
+        self._items: list[tuple[str, str | None]] = []
+
+    def add_item(self, message: str, detail: str | None = None) -> WarningPanel:
+        """Add a warning item.
+
+        Args:
+            message: The warning message.
+            detail: Optional detail/context for the warning.
+
+        Returns:
+            Self for method chaining.
+        """
+        self._items.append((message, detail))
+        return self
+
+    def clear(self) -> WarningPanel:
+        """Clear all warning items.
+
+        Returns:
+            Self for method chaining.
+        """
+        self._items = []
+        return self
+
+    def render(self) -> Panel:
+        """Render the warning panel.
+
+        Returns:
+            A Rich Panel with warning styling.
+        """
+        parts = []
+
+        for message, detail in self._items:
+            parts.append(Text(f"  {message}", style="bold"))
+            if detail:
+                parts.append(Text(f"    {detail}", style="dim"))
+
+        content = Text("\n").join(parts) if parts else Text("Warning")
+
+        title = self.title
+        if self.show_icon:
+            title = f"[warning]![/] {title}"
+
+        return Panel(
+            content,
+            title=f"[warning]{title}[/]",
+            border_style=COLORS["warning"],
+            padding=(0, 1),
+        )
+
+    def print(self, console: Console) -> None:
+        """Print the warning panel to the console.
+
+        Args:
+            console: Rich Console to print to.
+        """
+        console.print(self.render())
+
+
 class ErrorPanel:
     """A panel for displaying errors with prominent red styling.
 
@@ -403,4 +482,24 @@ def create_error_panel(
         panel.set_details(details)
     if suggestion:
         panel.set_suggestion(suggestion)
+    return panel
+
+
+def create_warning_panel(
+    items: list[tuple[str, str | None]],
+    *,
+    title: str = "Warning",
+) -> WarningPanel:
+    """Create a warning panel with items.
+
+    Args:
+        items: List of (message, detail) tuples. Detail can be None.
+        title: Title for the panel.
+
+    Returns:
+        A configured WarningPanel instance.
+    """
+    panel = WarningPanel(title=title)
+    for message, detail in items:
+        panel.add_item(message, detail)
     return panel

@@ -25,9 +25,11 @@ from zoyd.tui.panels import (
     StatusBar,
     OutputPanel,
     ErrorPanel,
+    WarningPanel,
     create_status_bar,
     create_output_panel,
     create_error_panel,
+    create_warning_panel,
 )
 
 # Re-export status rendering
@@ -56,9 +58,11 @@ __all__ = [
     "StatusBar",
     "OutputPanel",
     "ErrorPanel",
+    "WarningPanel",
     "create_status_bar",
     "create_output_panel",
     "create_error_panel",
+    "create_warning_panel",
     # Status rendering
     "render_status",
     "print_status",

@@ -1119,7 +1119,7 @@ class TestPrdValidationCLI:
         prd_file.write_text("# Project\n- [ ] Valid task\n- [x] Completed task\n")
 
         result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--dry-run"])
-        assert "validation warnings" not in result.output.lower()
+        assert "prd validation" not in result.output.lower()
 
     def test_empty_task_text_warning(self, tmp_path):
         """Empty task text should show warning."""
@@ -1128,7 +1128,7 @@ class TestPrdValidationCLI:
         prd_file.write_text("# Project\n- [ ]\n- [ ] Valid task\n")
 
         result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--dry-run"])
-        assert "validation warnings" in result.output.lower()
+        assert "prd validation" in result.output.lower()
         assert "Empty task text" in result.output
 
     def test_malformed_checkbox_warning(self, tmp_path):
@@ -1138,7 +1138,7 @@ class TestPrdValidationCLI:
         prd_file.write_text("# Project\n-[]\n- [ ] Valid task\n")
 
         result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--dry-run"])
-        assert "validation warnings" in result.output.lower()
+        assert "prd validation" in result.output.lower()
         assert "Missing space" in result.output
 
     def test_multiple_warnings(self, tmp_path):
@@ -1148,7 +1148,7 @@ class TestPrdValidationCLI:
         prd_file.write_text("# Project\n- [ ]\n-[]\n- [ ] Valid task\n")
 
         result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--dry-run"])
-        assert "validation warnings" in result.output.lower()
+        assert "prd validation" in result.output.lower()
         assert "Empty task text" in result.output
         assert "Missing space" in result.output
 
@@ -1169,7 +1169,7 @@ class TestPrdValidationCLI:
 
         result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--dry-run"])
         # Should show warning but continue to dry run output
-        assert "validation warnings" in result.output.lower()
+        assert "prd validation" in result.output.lower()
         assert "DRY RUN" in result.output
 
 

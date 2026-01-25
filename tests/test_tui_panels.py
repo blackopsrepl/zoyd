@@ -562,14 +562,188 @@ class TestModuleExports:
             StatusBar,
             OutputPanel,
             ErrorPanel,
+            WarningPanel,
             create_status_bar,
             create_output_panel,
             create_error_panel,
+            create_warning_panel,
         )
 
         assert StatusBar is not None
         assert OutputPanel is not None
         assert ErrorPanel is not None
+        assert WarningPanel is not None
         assert callable(create_status_bar)
         assert callable(create_output_panel)
         assert callable(create_error_panel)
+        assert callable(create_warning_panel)
+
+
+class TestWarningPanel:
+    def test_creates_warning_panel(self):
+        from zoyd.tui.panels import WarningPanel
+
+        panel = WarningPanel()
+        assert panel is not None
+        assert panel.title == "Warning"
+
+    def test_custom_title(self):
+        from zoyd.tui.panels import WarningPanel
+
+        panel = WarningPanel(title="PRD Validation")
+        assert panel.title == "PRD Validation"
+
+    def test_show_icon_default(self):
+        from zoyd.tui.panels import WarningPanel
+
+        panel = WarningPanel()
+        assert panel.show_icon is True
+
+    def test_show_icon_disabled(self):
+        from zoyd.tui.panels import WarningPanel
+
+        panel = WarningPanel(show_icon=False)
+        assert panel.show_icon is False
+
+    def test_add_item(self):
+        from zoyd.tui.panels import WarningPanel
+
+        panel = WarningPanel()
+        result = panel.add_item("Line 5: Empty task")
+        assert result is panel  # Returns self for chaining
+        assert len(panel._items) == 1
+        assert panel._items[0] == ("Line 5: Empty task", None)
+
+    def test_add_item_with_detail(self):
+        from zoyd.tui.panels import WarningPanel
+
+        panel = WarningPanel()
+        panel.add_item("Line 5: Empty task", "- [ ]")
+        assert panel._items[0] == ("Line 5: Empty task", "- [ ]")
+
+    def test_method_chaining(self):
+        from zoyd.tui.panels import WarningPanel
+
+        panel = WarningPanel()
+        panel.add_item("Warning 1").add_item("Warning 2").add_item("Warning 3")
+        assert len(panel._items) == 3
+
+    def test_clear(self):
+        from zoyd.tui.panels import WarningPanel
+
+        panel = WarningPanel()
+        panel.add_item("Warning 1").add_item("Warning 2")
+        result = panel.clear()
+        assert result is panel
+        assert len(panel._items) == 0
+
+    def test_render_returns_panel(self):
+        from rich.panel import Panel
+
+        from zoyd.tui.panels import WarningPanel
+
+        panel = WarningPanel()
+        panel.add_item("Test warning")
+        rendered = panel.render()
+        assert isinstance(rendered, Panel)
+
+    def test_render_contains_items(self):
+        from zoyd.tui.panels import WarningPanel
+
+        panel = WarningPanel()
+        panel.add_item("Line 5: Missing space", "- []task")
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        console.print(panel.render())
+        rendered = output.getvalue()
+
+        assert "Line 5: Missing space" in rendered
+        assert "- []task" in rendered
+
+    def test_render_multiple_items(self):
+        from zoyd.tui.panels import WarningPanel
+
+        panel = WarningPanel()
+        panel.add_item("Warning 1", "detail 1")
+        panel.add_item("Warning 2", "detail 2")
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        console.print(panel.render())
+        rendered = output.getvalue()
+
+        assert "Warning 1" in rendered
+        assert "Warning 2" in rendered
+        assert "detail 1" in rendered
+        assert "detail 2" in rendered
+
+    def test_render_empty_panel(self):
+        from rich.panel import Panel
+
+        from zoyd.tui.panels import WarningPanel
+
+        panel = WarningPanel()
+        rendered = panel.render()
+        assert isinstance(rendered, Panel)
+
+    def test_print_method(self):
+        from zoyd.tui.panels import WarningPanel
+
+        panel = WarningPanel()
+        panel.add_item("Test warning")
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        panel.print(console)
+        rendered = output.getvalue()
+
+        assert "Test warning" in rendered
+
+
+class TestCreateWarningPanel:
+    def test_creates_panel(self):
+        from zoyd.tui.panels import create_warning_panel
+
+        panel = create_warning_panel([("Warning 1", None)])
+        assert panel is not None
+        assert len(panel._items) == 1
+
+    def test_custom_title(self):
+        from zoyd.tui.panels import create_warning_panel
+
+        panel = create_warning_panel([("Warning", None)], title="PRD Validation")
+        assert panel.title == "PRD Validation"
+
+    def test_multiple_items(self):
+        from zoyd.tui.panels import create_warning_panel
+
+        items = [
+            ("Line 5: Empty task", "- [ ]"),
+            ("Line 10: Malformed", "- []text"),
+        ]
+        panel = create_warning_panel(items)
+        assert len(panel._items) == 2
+
+    def test_empty_items(self):
+        from zoyd.tui.panels import create_warning_panel
+
+        panel = create_warning_panel([])
+        assert len(panel._items) == 0
+
+    def test_render_output(self):
+        from zoyd.tui.panels import create_warning_panel
+
+        items = [
+            ("Line 5: Empty task text", "- [ ]"),
+        ]
+        panel = create_warning_panel(items, title="PRD Validation")
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        panel.print(console)
+        rendered = output.getvalue()
+
+        assert "PRD Validation" in rendered
+        assert "Line 5: Empty task text" in rendered
+        assert "- [ ]" in rendered

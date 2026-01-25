@@ -11,7 +11,7 @@ from .config import load_config
 from .loop import LoopRunner
 from .tui.banner import print_banner
 from .tui.console import create_console
-from .tui.panels import create_status_bar
+from .tui.panels import create_status_bar, create_warning_panel
 from .tui.status import print_status
 
 
@@ -160,14 +160,16 @@ def run(
 
     # Validate PRD on startup
     prd_content = prd.read_prd(prd_path)
-    warnings = prd.validate_prd(prd_content)
-    if warnings:
-        click.echo()
-        click.echo(click.style("PRD validation warnings:", fg="yellow"))
-        for warning in warnings:
-            click.echo(click.style(f"  Line {warning.line_number}: {warning.message}", fg="yellow"))
-            click.echo(click.style(f"    {warning.line_content.strip()}", fg="yellow", dim=True))
-        click.echo()
+    validation_warnings = prd.validate_prd(prd_content)
+    if validation_warnings:
+        # Build warning items as (message, detail) tuples
+        warning_items = [
+            (f"Line {w.line_number}: {w.message}", w.line_content.strip())
+            for w in validation_warnings
+        ]
+        warning_panel = create_warning_panel(warning_items, title="PRD Validation")
+        warning_panel.print(console)
+        console.print()  # Add spacing after warning panel
 
     # Handle resume mode
     if resume:
