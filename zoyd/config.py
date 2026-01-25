@@ -26,6 +26,7 @@ class ZoydConfig:
     auto_commit: bool = True
     verbose: bool = False
     fail_fast: bool = False
+    max_cost: float | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "ZoydConfig":
@@ -47,6 +48,8 @@ class ZoydConfig:
             config.verbose = bool(data["verbose"])
         if "fail_fast" in data:
             config.fail_fast = bool(data["fail_fast"])
+        if "max_cost" in data:
+            config.max_cost = float(data["max_cost"]) if data["max_cost"] else None
         return config
 
 

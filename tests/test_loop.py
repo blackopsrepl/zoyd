@@ -267,7 +267,7 @@ class TestAutoCommit:
     @patch("zoyd.loop.invoke_claude")
     def test_generate_commit_message_success(self, mock_invoke):
         """Test successful commit message generation."""
-        mock_invoke.return_value = (0, "Add new feature\n\nImplemented the widget component")
+        mock_invoke.return_value = (0, "Add new feature\n\nImplemented the widget component", None)
 
         result = generate_commit_message("Made changes to widget", "Add widget")
         assert result == "Add new feature\n\nImplemented the widget component"
@@ -277,7 +277,8 @@ class TestAutoCommit:
         """Test that Co-Author lines are stripped from generated messages."""
         mock_invoke.return_value = (
             0,
-            "Add new feature\n\nImplemented the widget component\n\nCo-Authored-By: Someone <email>"
+            "Add new feature\n\nImplemented the widget component\n\nCo-Authored-By: Someone <email>",
+            None,
         )
 
         result = generate_commit_message("Made changes", "Add widget")
@@ -287,7 +288,7 @@ class TestAutoCommit:
     @patch("zoyd.loop.invoke_claude")
     def test_generate_commit_message_failure(self, mock_invoke):
         """Test commit message generation failure."""
-        mock_invoke.return_value = (1, "Error")
+        mock_invoke.return_value = (1, "Error", None)
 
         result = generate_commit_message("Made changes", "Add widget")
         assert result is None
@@ -551,7 +552,7 @@ class TestFailFast:
         prd_file.write_text("# PRD\n- [ ] Task 1\n- [ ] Task 2")
         progress_file = tmp_path / "progress.txt"
 
-        mock_invoke.return_value = (1, "Error: something went wrong")
+        mock_invoke.return_value = (1, "Error: something went wrong", None)
 
         runner = LoopRunner(
             prd_path=prd_file,
@@ -572,7 +573,7 @@ class TestFailFast:
         prd_file.write_text("# PRD\n- [ ] Task 1")
         progress_file = tmp_path / "progress.txt"
 
-        mock_invoke.return_value = (1, "Error: something went wrong")
+        mock_invoke.return_value = (1, "Error: something went wrong", None)
 
         runner = LoopRunner(
             prd_path=prd_file,
@@ -758,7 +759,7 @@ class TestVerboseModeTiming:
         # Mock time: start at 1000, then 1000 (first time.time call for start),
         # iteration_start at 1005, elapsed check at 1010, iteration end at 1015
         mock_time.side_effect = [1000.0, 1005.0, 1010.0, 1015.0, 1020.0]
-        mock_invoke.return_value = (0, "Task completed")
+        mock_invoke.return_value = (0, "Task completed", None)
 
         runner = LoopRunner(
             prd_path=prd_file,
@@ -783,7 +784,7 @@ class TestVerboseModeTiming:
 
         # Mock time for iteration duration calculation
         mock_time.side_effect = [1000.0, 1005.0, 1010.0, 1015.0, 1020.0, 1025.0]
-        mock_invoke.return_value = (0, "Task completed")
+        mock_invoke.return_value = (0, "Task completed", None)
 
         runner = LoopRunner(
             prd_path=prd_file,
@@ -899,7 +900,7 @@ class TestSummaryStatistics:
         progress_file = tmp_path / "progress.txt"
 
         mock_time.side_effect = [1000.0] + [1000.0 + i*5 for i in range(20)]
-        mock_invoke.return_value = (0, "Working on task")
+        mock_invoke.return_value = (0, "Working on task", None)
 
         runner = LoopRunner(
             prd_path=prd_file,
@@ -926,7 +927,7 @@ class TestSummaryStatistics:
         progress_file = tmp_path / "progress.txt"
 
         mock_time.side_effect = [1000.0] + [1000.0 + i*5 for i in range(20)]
-        mock_invoke.return_value = (1, "Error occurred")
+        mock_invoke.return_value = (1, "Error occurred", None)
 
         runner = LoopRunner(
             prd_path=prd_file,
@@ -952,7 +953,7 @@ class TestSummaryStatistics:
         progress_file = tmp_path / "progress.txt"
 
         mock_time.side_effect = [1000.0, 1005.0, 1010.0, 1015.0]
-        mock_invoke.return_value = (1, "Error occurred")
+        mock_invoke.return_value = (1, "Error occurred", None)
 
         runner = LoopRunner(
             prd_path=prd_file,
@@ -1170,3 +1171,241 @@ class TestPrdValidationCLI:
         # Should show warning but continue to dry run output
         assert "validation warnings" in result.output.lower()
         assert "DRY RUN" in result.output
+
+
+class TestMaxCost:
+    """Tests for max cost functionality."""
+
+    def test_max_cost_default_none(self, tmp_path):
+        """Test that max_cost defaults to None."""
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(prd_path=prd_file, progress_path=progress_file)
+        assert runner.max_cost is None
+
+    def test_max_cost_can_be_set(self, tmp_path):
+        """Test that max_cost can be set."""
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            max_cost=5.0,
+        )
+        assert runner.max_cost == 5.0
+
+    def test_stats_total_cost_initialized(self, tmp_path):
+        """Test that total cost starts at 0."""
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(prd_path=prd_file, progress_path=progress_file)
+        assert runner.stats_total_cost == 0.0
+
+    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.time.time")
+    def test_max_cost_stops_when_exceeded(self, mock_time, mock_invoke, tmp_path, capsys):
+        """Test that run stops when cost limit is exceeded."""
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1\n- [ ] Task 2")
+        progress_file = tmp_path / "progress.txt"
+
+        mock_time.side_effect = [1000.0] + [1000.0 + i*5 for i in range(20)]
+        # Return cost_usd that exceeds limit on first iteration
+        mock_invoke.return_value = (0, "Task completed", 1.5)  # $1.50 cost
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            max_cost=1.0,  # $1.00 limit
+            max_iterations=10,
+            delay=0,
+            auto_commit=False,
+        )
+        exit_code = runner.run()
+
+        # Exit code 4 for cost limit exceeded
+        assert exit_code == 4
+        captured = capsys.readouterr()
+        assert "Cost limit exceeded" in captured.out
+        assert "$1.50" in captured.out or "$1.5" in captured.out
+
+    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.time.time")
+    def test_cost_accumulates_across_iterations(self, mock_time, mock_invoke, tmp_path):
+        """Test that cost accumulates across iterations."""
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        mock_time.side_effect = [1000.0] + [1000.0 + i*5 for i in range(20)]
+        # Each iteration costs $0.50
+        mock_invoke.return_value = (0, "Working on task", 0.5)
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            max_cost=1.0,  # Will be exceeded after 2 iterations
+            max_iterations=5,
+            delay=0,
+            auto_commit=False,
+        )
+        exit_code = runner.run()
+
+        # Should stop after cost exceeds limit
+        assert exit_code == 4
+        # Should have accumulated cost from 2 iterations ($1.00)
+        assert runner.stats_total_cost >= 1.0
+
+    def test_summary_shows_cost_when_tracking(self, tmp_path, capsys):
+        """Test that summary shows cost when max_cost is set."""
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [x] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            max_cost=5.0,
+        )
+        runner.start_time = 1000.0
+        runner.stats_total_cost = 2.5
+
+        with patch("zoyd.loop.time.time", return_value=1010.0):
+            runner.print_summary()
+
+        captured = capsys.readouterr()
+        assert "Total cost: $2.5" in captured.out
+        assert "Cost limit: $5.00" in captured.out
+
+    def test_summary_hides_cost_when_not_tracking(self, tmp_path, capsys):
+        """Test that summary hides cost info when max_cost is not set."""
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [x] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            max_cost=None,
+        )
+        runner.start_time = 1000.0
+        runner.stats_total_cost = 0.0
+
+        with patch("zoyd.loop.time.time", return_value=1010.0):
+            runner.print_summary()
+
+        captured = capsys.readouterr()
+        assert "Total cost:" not in captured.out
+        assert "Cost limit:" not in captured.out
+
+
+class TestMaxCostCLI:
+    """Tests for max cost CLI option."""
+
+    def test_max_cost_flag_in_help(self):
+        """Test that --max-cost flag appears in CLI help."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["run", "--help"])
+        assert result.exit_code == 0
+        assert "--max-cost" in result.output
+        assert "Maximum cost in USD" in result.output
+
+    def test_max_cost_shown_in_output(self, tmp_path):
+        """Test that max cost is shown in CLI output."""
+        runner = CliRunner()
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [x] Task 1")
+
+        result = runner.invoke(cli, [
+            "run",
+            "--prd", str(prd_file),
+            "--max-cost", "10.50",
+            "--dry-run",
+        ])
+        assert "Max cost: $10.50" in result.output
+
+
+class TestInvokeClaudeCostTracking:
+    """Tests for invoke_claude cost tracking."""
+
+    @patch("zoyd.loop.subprocess.run")
+    def test_invoke_claude_returns_cost_from_json(self, mock_run):
+        """Test that invoke_claude extracts cost from JSON output."""
+        from zoyd.loop import invoke_claude
+        import json
+
+        json_output = json.dumps({
+            "result": "Task completed successfully",
+            "cost_usd": 0.25,
+        })
+        mock_run.return_value = MagicMock(returncode=0, stdout=json_output, stderr="")
+
+        return_code, output, cost = invoke_claude("test prompt", track_cost=True)
+
+        assert return_code == 0
+        assert output == "Task completed successfully"
+        assert cost == 0.25
+
+    @patch("zoyd.loop.subprocess.run")
+    def test_invoke_claude_no_cost_when_not_tracking(self, mock_run):
+        """Test that invoke_claude returns None cost when not tracking."""
+        from zoyd.loop import invoke_claude
+
+        mock_run.return_value = MagicMock(returncode=0, stdout="output", stderr="")
+
+        return_code, output, cost = invoke_claude("test prompt", track_cost=False)
+
+        assert return_code == 0
+        assert output == "output"
+        assert cost is None
+
+    @patch("zoyd.loop.subprocess.run")
+    def test_invoke_claude_uses_json_output_format_when_tracking(self, mock_run):
+        """Test that --output-format json is added when tracking cost."""
+        from zoyd.loop import invoke_claude
+        import json
+
+        json_output = json.dumps({"result": "done", "cost_usd": 0.1})
+        mock_run.return_value = MagicMock(returncode=0, stdout=json_output, stderr="")
+
+        invoke_claude("test prompt", track_cost=True)
+
+        call_args = mock_run.call_args
+        cmd = call_args[1].get("args") or call_args[0][0]
+        assert "--output-format" in cmd
+        assert "json" in cmd
+
+    @patch("zoyd.loop.subprocess.run")
+    def test_invoke_claude_handles_json_parse_error(self, mock_run):
+        """Test that invoke_claude handles invalid JSON gracefully."""
+        from zoyd.loop import invoke_claude
+
+        # Return invalid JSON
+        mock_run.return_value = MagicMock(returncode=0, stdout="not json", stderr="")
+
+        return_code, output, cost = invoke_claude("test prompt", track_cost=True)
+
+        assert return_code == 0
+        assert output == "not json"
+        assert cost is None
+
+    @patch("zoyd.loop.subprocess.run")
+    def test_invoke_claude_handles_missing_cost_field(self, mock_run):
+        """Test that invoke_claude handles JSON without cost_usd field."""
+        from zoyd.loop import invoke_claude
+        import json
+
+        json_output = json.dumps({"result": "done"})  # No cost_usd field
+        mock_run.return_value = MagicMock(returncode=0, stdout=json_output, stderr="")
+
+        return_code, output, cost = invoke_claude("test prompt", track_cost=True)
+
+        assert return_code == 0
+        assert output == "done"
+        assert cost is None

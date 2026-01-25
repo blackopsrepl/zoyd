@@ -1,5 +1,6 @@
 """Main loop orchestrator - invoke Claude Code repeatedly."""
 
+import json as json_module
 import re
 import subprocess
 import sys
@@ -126,7 +127,7 @@ def generate_commit_message(iteration_output: str, task_text: str, model: str | 
         iteration_output=iteration_output[:2000],  # Limit context size
         task_text=task_text,
     )
-    return_code, output = invoke_claude(prompt, model)
+    return_code, output, _ = invoke_claude(prompt, model)
     if return_code != 0:
         return None
     # Clean up the output - remove any accidental signatures
@@ -193,16 +194,18 @@ def invoke_claude(
     prompt: str,
     model: str | None = None,
     cwd: Path | None = None,
-) -> tuple[int, str]:
+    track_cost: bool = False,
+) -> tuple[int, str, float | None]:
     """Invoke Claude Code with the given prompt in sandbox mode.
 
     Args:
         prompt: The prompt to send to Claude.
         model: Optional model to use (e.g., "opus", "sonnet").
         cwd: Working directory for Claude.
+        track_cost: If True, use JSON output format to track cost.
 
     Returns:
-        Tuple of (return_code, output).
+        Tuple of (return_code, output, cost_usd). cost_usd is None if not tracking or unavailable.
     """
     # Enable sandbox mode via settings for filesystem/network isolation
     sandbox_settings = '{"sandbox": {"enabled": true, "autoAllowBashIfSandboxed": true}}'
@@ -210,6 +213,9 @@ def invoke_claude(
 
     if model:
         cmd.extend(["--model", model])
+
+    if track_cost:
+        cmd.extend(["--output-format", "json"])
 
     # Prompt is passed as a positional argument, not via --prompt
     cmd.append(prompt)
@@ -223,13 +229,27 @@ def invoke_claude(
             cwd=cwd,
         )
         output = result.stdout
+        cost_usd = None
+
+        if track_cost and result.returncode == 0:
+            # Parse JSON output to extract cost and text
+            try:
+                json_output = json_module.loads(output)
+                # Claude JSON output has 'result' and 'cost_usd' fields
+                cost_usd = json_output.get("cost_usd")
+                # Extract the actual text content from the result
+                output = json_output.get("result", output)
+            except (json_module.JSONDecodeError, TypeError):
+                # If JSON parsing fails, keep original output
+                pass
+
         if result.stderr:
             output += f"\n\nSTDERR:\n{result.stderr}"
-        return result.returncode, output
+        return result.returncode, output, cost_usd
     except FileNotFoundError:
-        return 1, "Error: 'claude' command not found. Is Claude Code installed?"
+        return 1, "Error: 'claude' command not found. Is Claude Code installed?", None
     except Exception as e:
-        return 1, f"Error invoking Claude: {e}"
+        return 1, f"Error invoking Claude: {e}", None
 
 
 def format_duration(seconds: float) -> str:
@@ -263,6 +283,7 @@ class LoopRunner:
         auto_commit: bool = True,
         resume: bool = False,
         fail_fast: bool = False,
+        max_cost: float | None = None,
     ):
         self.prd_path = prd_path.resolve()
         self.progress_path = progress_path.resolve()
@@ -274,6 +295,7 @@ class LoopRunner:
         self.auto_commit = auto_commit
         self.resume = resume
         self.fail_fast = fail_fast
+        self.max_cost = max_cost
         self.consecutive_failures = 0
         self.max_consecutive_failures = 3
         self.base_backoff = 2.0  # Base for exponential backoff
@@ -285,6 +307,8 @@ class LoopRunner:
         self.stats_tasks_completed_start: int = 0
         self.stats_tasks_completed_end: int = 0
         self.stats_total_tasks: int = 0
+        # Cost tracking
+        self.stats_total_cost: float = 0.0
 
     def get_backoff_delay(self) -> float:
         """Calculate exponential backoff delay based on consecutive failures.
@@ -342,6 +366,12 @@ class LoopRunner:
         # Tasks completed
         tasks_completed_this_run = self.stats_tasks_completed_end - self.stats_tasks_completed_start
         print(f"Tasks completed: {tasks_completed_this_run} ({self.stats_tasks_completed_end}/{self.stats_total_tasks} total)")
+
+        # Cost tracking (only show if we tracked cost)
+        if self.max_cost is not None or self.stats_total_cost > 0:
+            print(f"Total cost: ${self.stats_total_cost:.4f}")
+            if self.max_cost is not None:
+                print(f"Cost limit: ${self.max_cost:.2f}")
 
     def run(self) -> int:
         """Run the main loop.
@@ -424,7 +454,24 @@ class LoopRunner:
 
                 # Invoke Claude in sandbox mode
                 self.log("Invoking Claude in sandbox mode...")
-                return_code, output = invoke_claude(prompt, self.model)
+                track_cost = self.max_cost is not None
+                return_code, output, cost_usd = invoke_claude(
+                    prompt, self.model, track_cost=track_cost
+                )
+
+                # Track cost if available
+                if cost_usd is not None:
+                    self.stats_total_cost += cost_usd
+                    self.log(f"Iteration cost: ${cost_usd:.4f}, Total: ${self.stats_total_cost:.4f}")
+
+                    # Check if we've exceeded max cost
+                    if self.max_cost is not None and self.stats_total_cost >= self.max_cost:
+                        print(f"Cost limit exceeded: ${self.stats_total_cost:.4f} >= ${self.max_cost:.2f}")
+                        self.stats_tasks_completed_end = completed
+                        self.stats_iterations += 1
+                        self.stats_successes += 1
+                        self.print_summary()
+                        return 4  # Exit code 4 for cost limit exceeded
 
                 if return_code != 0:
                     self.consecutive_failures += 1

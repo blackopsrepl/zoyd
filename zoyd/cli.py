@@ -79,6 +79,12 @@ def cli():
     is_flag=True,
     help="Exit immediately on first failure instead of retrying",
 )
+@click.option(
+    "--max-cost",
+    default=None,
+    type=float,
+    help="Maximum cost in USD before stopping (estimates token usage)",
+)
 @click.pass_context
 def run(
     ctx: click.Context,
@@ -92,6 +98,7 @@ def run(
     auto_commit: bool | None,
     resume: bool,
     fail_fast: bool | None,
+    max_cost: float | None,
 ):
     """Run the Zoyd loop against a PRD file.
 
@@ -123,6 +130,8 @@ def run(
         verbose = config.verbose
     if fail_fast is None:
         fail_fast = config.fail_fast
+    if max_cost is None:
+        max_cost = config.max_cost
 
     click.echo(f"Zoyd v{__version__}")
     click.echo(f"PRD: {prd_path}")
@@ -130,6 +139,8 @@ def run(
     click.echo(f"Max iterations: {max_iterations}")
     if model:
         click.echo(f"Model: {model}")
+    if max_cost is not None:
+        click.echo(f"Max cost: ${max_cost:.2f}")
     if dry_run:
         click.echo("Mode: DRY RUN")
 
@@ -175,6 +186,7 @@ def run(
         auto_commit=auto_commit,
         resume=resume,
         fail_fast=fail_fast,
+        max_cost=max_cost,
     )
 
     exit_code = runner.run()

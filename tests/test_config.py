@@ -22,6 +22,7 @@ class TestZoydConfig:
         assert config.auto_commit is True
         assert config.verbose is False
         assert config.fail_fast is False
+        assert config.max_cost is None
 
     def test_from_dict_all_values(self):
         """from_dict loads all config values."""
@@ -34,6 +35,7 @@ class TestZoydConfig:
             "auto_commit": False,
             "verbose": True,
             "fail_fast": True,
+            "max_cost": 10.0,
         }
         config = ZoydConfig.from_dict(data)
         assert config.prd == "custom.md"
@@ -44,6 +46,7 @@ class TestZoydConfig:
         assert config.auto_commit is False
         assert config.verbose is True
         assert config.fail_fast is True
+        assert config.max_cost == 10.0
 
     def test_from_dict_partial_values(self):
         """from_dict uses defaults for missing values."""
@@ -158,6 +161,7 @@ delay = 3.0
 auto_commit = false
 verbose = true
 fail_fast = true
+max_cost = 15.50
 """)
         config = load_config(config_file)
         assert config.prd == "root_level.md"
@@ -168,6 +172,7 @@ fail_fast = true
         assert config.auto_commit is False
         assert config.verbose is True
         assert config.fail_fast is True
+        assert config.max_cost == 15.50
 
     def test_loads_zoyd_section_config(self, tmp_path):
         """Loads config values from [zoyd] section."""
