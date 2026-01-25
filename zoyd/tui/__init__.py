@@ -24,10 +24,12 @@ from zoyd.tui.task_tree import render_task_tree
 from zoyd.tui.panels import (
     StatusBar,
     OutputPanel,
+    ClaudeOutputPanel,
     ErrorPanel,
     WarningPanel,
     create_status_bar,
     create_output_panel,
+    create_claude_output_panel,
     create_error_panel,
     create_warning_panel,
 )
@@ -85,10 +87,12 @@ __all__ = [
     # Panels
     "StatusBar",
     "OutputPanel",
+    "ClaudeOutputPanel",
     "ErrorPanel",
     "WarningPanel",
     "create_status_bar",
     "create_output_panel",
+    "create_claude_output_panel",
     "create_error_panel",
     "create_warning_panel",
     # Status rendering

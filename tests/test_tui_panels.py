@@ -561,22 +561,36 @@ class TestModuleExports:
         from zoyd.tui import (
             StatusBar,
             OutputPanel,
+            ClaudeOutputPanel,
             ErrorPanel,
             WarningPanel,
             create_status_bar,
             create_output_panel,
+            create_claude_output_panel,
             create_error_panel,
             create_warning_panel,
         )
 
         assert StatusBar is not None
         assert OutputPanel is not None
+        assert ClaudeOutputPanel is not None
         assert ErrorPanel is not None
         assert WarningPanel is not None
         assert callable(create_status_bar)
         assert callable(create_output_panel)
+        assert callable(create_claude_output_panel)
         assert callable(create_error_panel)
         assert callable(create_warning_panel)
+
+    def test_claude_output_panel_importable(self):
+        from zoyd.tui.panels import ClaudeOutputPanel
+
+        assert ClaudeOutputPanel is not None
+
+    def test_create_claude_output_panel_importable(self):
+        from zoyd.tui.panels import create_claude_output_panel
+
+        assert callable(create_claude_output_panel)
 
 
 class TestWarningPanel:
@@ -699,6 +713,199 @@ class TestWarningPanel:
         rendered = output.getvalue()
 
         assert "Test warning" in rendered
+
+
+class TestClaudeOutputPanel:
+    def test_creates_panel(self):
+        from zoyd.tui.panels import ClaudeOutputPanel
+
+        panel = ClaudeOutputPanel()
+        assert panel is not None
+        assert panel.title == "Claude Output"
+
+    def test_custom_title(self):
+        from zoyd.tui.panels import ClaudeOutputPanel
+
+        panel = ClaudeOutputPanel(title="AI Response")
+        assert panel.title == "AI Response"
+
+    def test_subtitle(self):
+        from zoyd.tui.panels import ClaudeOutputPanel
+
+        panel = ClaudeOutputPanel(subtitle="Iteration 5")
+        assert panel.subtitle == "Iteration 5"
+
+    def test_set_content(self):
+        from zoyd.tui.panels import ClaudeOutputPanel
+
+        panel = ClaudeOutputPanel()
+        result = panel.set_content("# Hello World")
+        assert result is panel
+        assert panel._content == "# Hello World"
+
+    def test_set_markdown_enabled_by_default(self):
+        from zoyd.tui.panels import ClaudeOutputPanel
+
+        panel = ClaudeOutputPanel()
+        assert panel._use_markdown is True
+
+    def test_set_markdown_disable(self):
+        from zoyd.tui.panels import ClaudeOutputPanel
+
+        panel = ClaudeOutputPanel()
+        result = panel.set_markdown(False)
+        assert result is panel
+        assert panel._use_markdown is False
+
+    def test_clear(self):
+        from zoyd.tui.panels import ClaudeOutputPanel
+
+        panel = ClaudeOutputPanel()
+        panel.set_content("Some content")
+        result = panel.clear()
+        assert result is panel
+        assert panel._content == ""
+
+    def test_render_returns_panel(self):
+        from rich.panel import Panel
+
+        from zoyd.tui.panels import ClaudeOutputPanel
+
+        panel = ClaudeOutputPanel()
+        panel.set_content("# Test")
+        rendered = panel.render()
+        assert isinstance(rendered, Panel)
+
+    def test_render_empty_shows_placeholder(self):
+        from zoyd.tui.panels import ClaudeOutputPanel
+
+        panel = ClaudeOutputPanel()
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        console.print(panel.render())
+        rendered = output.getvalue()
+
+        assert "Awaiting Claude output" in rendered
+
+    def test_render_markdown_content(self):
+        from zoyd.tui.panels import ClaudeOutputPanel
+
+        panel = ClaudeOutputPanel()
+        panel.set_content("# Heading\n\nSome **bold** text")
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        console.print(panel.render())
+        rendered = output.getvalue()
+
+        # The heading and text should be present
+        assert "Heading" in rendered
+        assert "bold" in rendered
+
+    def test_render_plain_text_when_markdown_disabled(self):
+        from zoyd.tui.panels import ClaudeOutputPanel
+
+        panel = ClaudeOutputPanel()
+        panel.set_content("# Not a heading")
+        panel.set_markdown(False)
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        console.print(panel.render())
+        rendered = output.getvalue()
+
+        # Should contain the raw markdown syntax
+        assert "# Not a heading" in rendered
+
+    def test_render_code_blocks(self):
+        from zoyd.tui.panels import ClaudeOutputPanel
+
+        content = "```python\ndef hello():\n    print('Hello')\n```"
+        panel = ClaudeOutputPanel()
+        panel.set_content(content)
+
+        output = StringIO()
+        # Use no_color to avoid ANSI escape sequences breaking assertions
+        console = Console(file=output, force_terminal=True, width=80, no_color=True)
+        console.print(panel.render())
+        rendered = output.getvalue()
+
+        assert "def hello" in rendered
+        assert "print" in rendered
+
+    def test_render_with_subtitle(self):
+        from zoyd.tui.panels import ClaudeOutputPanel
+
+        panel = ClaudeOutputPanel(subtitle="Iteration 3")
+        panel.set_content("Test output")
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        console.print(panel.render())
+        rendered = output.getvalue()
+
+        assert "Iteration 3" in rendered
+
+    def test_print_method(self):
+        from zoyd.tui.panels import ClaudeOutputPanel
+
+        panel = ClaudeOutputPanel()
+        panel.set_content("# Test Output")
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        panel.print(console)
+        rendered = output.getvalue()
+
+        assert "Test Output" in rendered
+
+    def test_method_chaining(self):
+        from zoyd.tui.panels import ClaudeOutputPanel
+
+        panel = ClaudeOutputPanel()
+        panel.set_content("Content").set_markdown(True)
+        assert panel._content == "Content"
+        assert panel._use_markdown is True
+
+
+class TestCreateClaudeOutputPanel:
+    def test_creates_panel(self):
+        from zoyd.tui.panels import create_claude_output_panel
+
+        panel = create_claude_output_panel("# Test")
+        assert panel is not None
+        assert panel._content == "# Test"
+
+    def test_custom_title(self):
+        from zoyd.tui.panels import create_claude_output_panel
+
+        panel = create_claude_output_panel("Test", title="AI Output")
+        assert panel.title == "AI Output"
+
+    def test_with_subtitle(self):
+        from zoyd.tui.panels import create_claude_output_panel
+
+        panel = create_claude_output_panel("Test", subtitle="Iteration 1")
+        assert panel.subtitle == "Iteration 1"
+
+    def test_markdown_enabled_by_default(self):
+        from zoyd.tui.panels import create_claude_output_panel
+
+        panel = create_claude_output_panel("# Test")
+        assert panel._use_markdown is True
+
+    def test_markdown_can_be_disabled(self):
+        from zoyd.tui.panels import create_claude_output_panel
+
+        panel = create_claude_output_panel("# Test", use_markdown=False)
+        assert panel._use_markdown is False
+
+    def test_empty_content(self):
+        from zoyd.tui.panels import create_claude_output_panel
+
+        panel = create_claude_output_panel()
+        assert panel._content == ""
 
 
 class TestCreateWarningPanel:

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
@@ -172,6 +173,97 @@ class OutputPanel:
 
     def print(self, console: Console) -> None:
         """Print the output panel to the console.
+
+        Args:
+            console: Rich Console to print to.
+        """
+        console.print(self.render())
+
+
+class ClaudeOutputPanel:
+    """A panel for displaying Claude output with Markdown rendering.
+
+    Renders Claude's markdown output with proper styling for headers,
+    code blocks, lists, and other markdown elements.
+    """
+
+    def __init__(
+        self,
+        title: str = "Claude Output",
+        *,
+        subtitle: str | None = None,
+        max_height: int | None = None,
+    ) -> None:
+        """Initialize the Claude output panel.
+
+        Args:
+            title: Title for the panel.
+            subtitle: Optional subtitle shown in the panel border.
+            max_height: Maximum height in lines (not yet enforced).
+        """
+        self.title = title
+        self.subtitle = subtitle
+        self.max_height = max_height
+        self._content: str = ""
+        self._use_markdown: bool = True
+
+    def set_content(self, content: str) -> ClaudeOutputPanel:
+        """Set the content to display in the panel.
+
+        Args:
+            content: Markdown text from Claude's output.
+
+        Returns:
+            Self for method chaining.
+        """
+        self._content = content
+        return self
+
+    def set_markdown(self, use_markdown: bool) -> ClaudeOutputPanel:
+        """Enable or disable markdown rendering.
+
+        Args:
+            use_markdown: Whether to render content as markdown.
+
+        Returns:
+            Self for method chaining.
+        """
+        self._use_markdown = use_markdown
+        return self
+
+    def clear(self) -> ClaudeOutputPanel:
+        """Clear the panel content.
+
+        Returns:
+            Self for method chaining.
+        """
+        self._content = ""
+        return self
+
+    def render(self) -> Panel:
+        """Render the Claude output panel with Markdown.
+
+        Returns:
+            A Rich Panel containing the rendered markdown content.
+        """
+        if self._content:
+            if self._use_markdown:
+                content: RenderableType = Markdown(self._content)
+            else:
+                content = Text(self._content)
+        else:
+            content = Text("Awaiting Claude output...", style="dim")
+
+        return Panel(
+            content,
+            title=f"[panel.title]{self.title}[/]",
+            subtitle=f"[dim]{self.subtitle}[/]" if self.subtitle else None,
+            border_style=COLORS["twilight"],
+            padding=(1, 2),
+        )
+
+    def print(self, console: Console) -> None:
+        """Print the Claude output panel to the console.
 
         Args:
             console: Rich Console to print to.
@@ -502,4 +594,28 @@ def create_warning_panel(
     panel = WarningPanel(title=title)
     for message, detail in items:
         panel.add_item(message, detail)
+    return panel
+
+
+def create_claude_output_panel(
+    content: str = "",
+    *,
+    title: str = "Claude Output",
+    subtitle: str | None = None,
+    use_markdown: bool = True,
+) -> ClaudeOutputPanel:
+    """Create a Claude output panel with markdown content.
+
+    Args:
+        content: Markdown text from Claude's output.
+        title: Title for the panel.
+        subtitle: Optional subtitle (e.g., iteration number).
+        use_markdown: Whether to render content as markdown.
+
+    Returns:
+        A configured ClaudeOutputPanel instance.
+    """
+    panel = ClaudeOutputPanel(title=title, subtitle=subtitle)
+    panel.set_content(content)
+    panel.set_markdown(use_markdown)
     return panel

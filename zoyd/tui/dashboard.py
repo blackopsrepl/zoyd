@@ -24,7 +24,7 @@ from rich.text import Text
 from zoyd.prd import Task
 from zoyd.tui.banner import MIND_FLAYER_COMPACT, MIND_FLAYER_FULL
 from zoyd.tui.events import Event, EventEmitter, EventType
-from zoyd.tui.panels import create_error_panel, create_status_bar
+from zoyd.tui.panels import create_claude_output_panel, create_error_panel, create_status_bar
 from zoyd.tui.progress import create_progress_panel
 from zoyd.tui.task_tree import render_task_tree
 from zoyd.tui.theme import COLORS
@@ -255,21 +255,33 @@ class Dashboard:
                 details=self.state.error_details,
             ).render()
 
-        # Show output or placeholder
+        # Show Claude output with Markdown rendering
         if self.state.current_output:
-            content = Text(self.state.current_output)
-        elif self.state.output_lines:
-            # Show recent log lines
+            # Use ClaudeOutputPanel for proper Markdown rendering
+            subtitle = f"Iteration {self.state.iteration}" if self.state.iteration > 0 else None
+            return create_claude_output_panel(
+                self.state.current_output,
+                title="Claude Output",
+                subtitle=subtitle,
+            ).render()
+
+        # Show recent log lines when no Claude output
+        if self.state.output_lines:
             content = Text()
             for i, line in enumerate(self.state.output_lines):
                 if i > 0:
                     content.append("\n")
                 content.append(line)
-        else:
-            content = Text(self.state.status_message, style="dim")
+            return Panel(
+                content,
+                title="[panel.title]Output[/]",
+                border_style=COLORS["twilight"],
+                padding=(1, 2),
+            )
 
+        # Show placeholder with status message
         return Panel(
-            content,
+            Text(self.state.status_message, style="dim"),
             title="[panel.title]Output[/]",
             border_style=COLORS["twilight"],
             padding=(1, 2),
