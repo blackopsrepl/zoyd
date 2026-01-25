@@ -226,7 +226,8 @@ class TestCLIConfigIntegration:
             # Create the PRD file
             Path("custom.md").write_text("# Test PRD\n- [ ] Task 1\n")
 
-            result = runner.invoke(cli, ["run", "--dry-run"])
+            # Use --no-tui to get capturable output (screen=True uses alternate buffer)
+            result = runner.invoke(cli, ["run", "--dry-run", "--no-tui"])
             # Should use custom.md from config - verify by checking the PRD content in dry-run prompt
             assert "# Test PRD" in result.output
             # Max iterations 3 means it stops at iteration 3/3
@@ -242,7 +243,8 @@ class TestCLIConfigIntegration:
             Path("config.md").write_text("# Config PRD\n- [ ] Task\n")
             Path("override.md").write_text("# Override PRD\n- [ ] Task\n")
 
-            result = runner.invoke(cli, ["run", "--dry-run", "--prd", "override.md", "-n", "7"])
+            # Use --no-tui to get capturable output (screen=True uses alternate buffer)
+            result = runner.invoke(cli, ["run", "--dry-run", "--prd", "override.md", "-n", "7", "--no-tui"])
             # Should use CLI values - verify by checking the PRD content in dry-run prompt
             assert "# Override PRD" in result.output
             # Max iterations 7 means it stops at iteration 7/7
@@ -280,11 +282,12 @@ class TestCLIConfigIntegration:
         """run command uses model from config."""
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            Path("zoyd.toml").write_text('prd = "test.md"\nmodel = "opus"\n')
+            Path("zoyd.toml").write_text('prd = "test.md"\nmodel = "opus"\nmax_iterations = 1\n')
             Path("test.md").write_text("# Test\n- [ ] Task\n")
 
-            result = runner.invoke(cli, ["run", "--dry-run"])
-            # Model config is used - shown in status bar
+            # Use --no-tui to get capturable output (screen=True uses alternate buffer)
+            result = runner.invoke(cli, ["run", "--dry-run", "--no-tui"])
+            # Model config is used - shown in startup output
             assert "opus" in result.output
 
     def test_missing_prd_shows_error(self, tmp_path):
@@ -299,39 +302,43 @@ class TestCLIConfigIntegration:
 
 
 class TestConfigurationPanelCLI:
-    """Tests for the configuration panel displayed at startup."""
+    """Tests for the configuration panel displayed at startup.
+
+    Note: Tests use --no-tui because screen=True mode uses alternate buffer
+    which is not captured by CliRunner. The PlainDisplay outputs configuration
+    info in plain text format.
+    """
 
     def test_config_panel_shows_prd(self, tmp_path):
-        """Configuration panel shows PRD label."""
+        """Configuration panel shows PRD path."""
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
             Path("test.md").write_text("# Test\n- [ ] Task\n")
-            result = runner.invoke(cli, ["run", "--dry-run", "--prd", "test.md"])
-            # Status bar shows PRD: label (path may be truncated)
-            assert "Status" in result.output
+            result = runner.invoke(cli, ["run", "--dry-run", "--prd", "test.md", "--no-tui", "-n", "1"])
+            # PlainDisplay shows "PRD: <path>" in startup output
             assert "PRD:" in result.output
+            assert "test.md" in result.output
 
     def test_config_panel_shows_progress(self, tmp_path):
-        """Configuration panel shows progress label."""
+        """Configuration panel shows progress path."""
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
             Path("test.md").write_text("# Test\n- [ ] Task\n")
             result = runner.invoke(
-                cli, ["run", "--dry-run", "--prd", "test.md", "--progress", "my_progress.txt"]
+                cli, ["run", "--dry-run", "--prd", "test.md", "--progress", "my_progress.txt", "--no-tui", "-n", "1"]
             )
-            assert "Status" in result.output
-            # Progress: label shown (path may be truncated)
+            # PlainDisplay shows "Progress: <path>" in startup output
             assert "Progress:" in result.output
+            assert "my_progress.txt" in result.output
 
     def test_config_panel_shows_iterations(self, tmp_path):
-        """Configuration panel shows iterations count."""
+        """Configuration panel shows max iterations."""
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
             Path("test.md").write_text("# Test\n- [ ] Task\n")
-            result = runner.invoke(cli, ["run", "--dry-run", "--prd", "test.md", "-n", "5"])
-            assert "Status" in result.output
-            # Shows iteration/max format
-            assert "/5" in result.output
+            result = runner.invoke(cli, ["run", "--dry-run", "--prd", "test.md", "-n", "5", "--no-tui"])
+            # PlainDisplay shows "Max iterations: N" in startup output
+            assert "Max iterations: 5" in result.output
 
     def test_config_panel_shows_model(self, tmp_path):
         """Configuration panel shows model when set."""
@@ -339,22 +346,22 @@ class TestConfigurationPanelCLI:
         with runner.isolated_filesystem(temp_dir=tmp_path):
             Path("test.md").write_text("# Test\n- [ ] Task\n")
             result = runner.invoke(
-                cli, ["run", "--dry-run", "--prd", "test.md", "--model", "opus"]
+                cli, ["run", "--dry-run", "--prd", "test.md", "--model", "opus", "--no-tui", "-n", "1"]
             )
-            assert "Status" in result.output
+            # PlainDisplay shows "Model: <model>" in startup output
+            assert "Model:" in result.output
             assert "opus" in result.output
 
     def test_config_panel_shows_cost_limit(self, tmp_path):
-        """Configuration panel shows cost when set."""
+        """Configuration panel shows cost limit when set."""
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
             Path("test.md").write_text("# Test\n- [ ] Task\n")
             result = runner.invoke(
-                cli, ["run", "--dry-run", "--prd", "test.md", "--max-cost", "5.00"]
+                cli, ["run", "--dry-run", "--prd", "test.md", "--max-cost", "5.00", "--no-tui", "-n", "1"]
             )
-            assert "Status" in result.output
-            # Shows cost in status bar
-            assert "Cost:" in result.output
+            # PlainDisplay shows "Cost limit: $X.XX" in startup output
+            assert "Cost limit:" in result.output
             assert "$5.00" in result.output
 
     def test_config_panel_all_options(self, tmp_path):
@@ -377,14 +384,18 @@ class TestConfigurationPanelCLI:
                     "sonnet",
                     "--max-cost",
                     "2.50",
+                    "--no-tui",
                 ],
             )
-            assert "Status" in result.output
-            # Check key labels are present (paths may be truncated)
+            # PlainDisplay prints all configuration in startup output
             assert "PRD:" in result.output
+            assert "test.md" in result.output
             assert "Progress:" in result.output
-            assert "/10" in result.output
+            assert "prog.txt" in result.output
+            assert "Max iterations: 10" in result.output
+            assert "Model:" in result.output
             assert "sonnet" in result.output
+            assert "Cost limit:" in result.output
             assert "$2.50" in result.output
 
 

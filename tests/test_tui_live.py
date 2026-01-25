@@ -280,6 +280,114 @@ class TestLiveDisplayContextManager:
             assert ctx is live
 
 
+class TestLiveDisplayResizeHandler:
+    """Tests for LiveDisplay terminal resize handling."""
+
+    def test_old_sigwinch_handler_initially_none(self) -> None:
+        """Old SIGWINCH handler should be None initially."""
+        console = Console(file=io.StringIO(), force_terminal=True)
+        live = LiveDisplay(console)
+        assert live._old_sigwinch_handler is None
+
+    def test_install_resize_handler_saves_old_handler(self) -> None:
+        """_install_resize_handler should save the previous handler."""
+        import signal
+        if not hasattr(signal, "SIGWINCH"):
+            pytest.skip("SIGWINCH not available on this platform")
+
+        console = Console(file=io.StringIO(), force_terminal=True)
+        live = LiveDisplay(console)
+
+        # Save current handler for comparison
+        old_handler = signal.getsignal(signal.SIGWINCH)
+
+        live._install_resize_handler()
+        assert live._old_sigwinch_handler == old_handler
+
+        # Clean up
+        live._restore_resize_handler()
+
+    def test_restore_resize_handler_restores_old_handler(self) -> None:
+        """_restore_resize_handler should restore the previous handler."""
+        import signal
+        if not hasattr(signal, "SIGWINCH"):
+            pytest.skip("SIGWINCH not available on this platform")
+
+        console = Console(file=io.StringIO(), force_terminal=True)
+        live = LiveDisplay(console)
+
+        # Save current handler for comparison
+        original_handler = signal.getsignal(signal.SIGWINCH)
+
+        live._install_resize_handler()
+        live._restore_resize_handler()
+
+        # Handler should be restored
+        assert signal.getsignal(signal.SIGWINCH) == original_handler
+        assert live._old_sigwinch_handler is None
+
+    def test_context_manager_installs_handler(self) -> None:
+        """Entering context should install resize handler."""
+        import signal
+        if not hasattr(signal, "SIGWINCH"):
+            pytest.skip("SIGWINCH not available on this platform")
+
+        output = io.StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        live = LiveDisplay(console)
+
+        with live:
+            # Handler should be installed
+            current_handler = signal.getsignal(signal.SIGWINCH)
+            assert current_handler == live._handle_resize
+
+    def test_context_manager_restores_handler_on_exit(self) -> None:
+        """Exiting context should restore previous handler."""
+        import signal
+        if not hasattr(signal, "SIGWINCH"):
+            pytest.skip("SIGWINCH not available on this platform")
+
+        output = io.StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        live = LiveDisplay(console)
+
+        # Save current handler for comparison
+        original_handler = signal.getsignal(signal.SIGWINCH)
+
+        with live:
+            pass
+
+        # Handler should be restored
+        assert signal.getsignal(signal.SIGWINCH) == original_handler
+
+    def test_handle_resize_method_refreshes_display(self) -> None:
+        """_handle_resize should refresh the display."""
+        output = io.StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        live = LiveDisplay(console)
+
+        with live:
+            # Call handle_resize - should not raise
+            live._handle_resize(0, None)
+
+    def test_handle_resize_public_method(self) -> None:
+        """handle_resize should be callable and return self."""
+        console = Console(file=io.StringIO(), force_terminal=True)
+        live = LiveDisplay(console)
+
+        result = live.handle_resize()
+        assert result is live
+
+    def test_handle_resize_without_live_context(self) -> None:
+        """handle_resize should not raise when called outside context."""
+        console = Console(file=io.StringIO(), force_terminal=True)
+        live = LiveDisplay(console)
+
+        # Should not raise even when _live is None
+        result = live.handle_resize()
+        assert result is live
+
+
 class TestCreateLiveDisplay:
     """Tests for create_live_display factory function."""
 

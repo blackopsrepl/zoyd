@@ -2,12 +2,16 @@
 
 Provides a Rich Live display that keeps the banner/status fixed at the top
 while allowing iteration logs to scroll underneath.
+
+The display handles terminal resize events (SIGWINCH) gracefully by refreshing
+the display when the terminal size changes.
 """
 
 from __future__ import annotations
 
+import signal
 from collections import deque
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable
 
 from rich.console import Group
 from rich.live import Live
@@ -74,6 +78,9 @@ class LiveDisplay:
 
         # Live display
         self._live: Live | None = None
+
+        # Signal handler for terminal resize
+        self._old_sigwinch_handler: Callable[[int, Any], Any] | int | None = None
 
     @property
     def iteration(self) -> int:
@@ -245,12 +252,71 @@ class LiveDisplay:
         if self._live is not None:
             self._live.update(self._render())
 
+    # --- Terminal resize handling ---
+
+    def _handle_resize(self, signum: int, frame: Any) -> None:
+        """Handle terminal resize signal (SIGWINCH).
+
+        This method is called when the terminal is resized. It forces a refresh
+        of the live display to adapt to the new terminal size.
+
+        Args:
+            signum: The signal number (SIGWINCH).
+            frame: The current stack frame (unused).
+        """
+        # Force console to re-detect terminal size
+        if hasattr(self.console, '_width'):
+            self.console._width = None
+        if hasattr(self.console, '_height'):
+            self.console._height = None
+
+        # Refresh the display
+        self._refresh()
+
+    def _install_resize_handler(self) -> None:
+        """Install the SIGWINCH signal handler for terminal resize.
+
+        Saves the old handler so it can be restored on exit.
+        Only installs on Unix systems where SIGWINCH is available.
+        """
+        if hasattr(signal, "SIGWINCH"):
+            self._old_sigwinch_handler = signal.signal(
+                signal.SIGWINCH, self._handle_resize
+            )
+
+    def _restore_resize_handler(self) -> None:
+        """Restore the previous SIGWINCH signal handler.
+
+        Called when exiting the display context to restore the
+        previous signal handler (if any).
+        """
+        if hasattr(signal, "SIGWINCH") and self._old_sigwinch_handler is not None:
+            signal.signal(signal.SIGWINCH, self._old_sigwinch_handler)
+            self._old_sigwinch_handler = None
+
+    def handle_resize(self) -> "LiveDisplay":
+        """Manually trigger a resize handling.
+
+        This can be called programmatically to force the display to
+        refresh based on the current terminal dimensions.
+
+        Returns:
+            Self for method chaining.
+        """
+        self._handle_resize(0, None)
+        return self
+
     def __enter__(self) -> LiveDisplay:
         """Enter the live display context.
+
+        Installs a SIGWINCH handler to gracefully handle terminal resizes.
 
         Returns:
             Self for use in with statement.
         """
+        # Install resize handler before starting Live
+        self._install_resize_handler()
+
         self._live = Live(
             self._render(),
             console=self.console,
@@ -262,10 +328,16 @@ class LiveDisplay:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        """Exit the live display context."""
+        """Exit the live display context.
+
+        Restores the previous SIGWINCH handler.
+        """
         if self._live is not None:
             self._live.__exit__(exc_type, exc_val, exc_tb)
             self._live = None
+
+        # Restore the old resize handler
+        self._restore_resize_handler()
 
 
 class PlainDisplay:

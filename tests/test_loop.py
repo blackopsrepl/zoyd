@@ -423,7 +423,7 @@ class TestResumeCLI:
             assert "does not exist" in result.output
 
     def test_resume_shows_completed_tasks(self, tmp_path):
-        """Test that --resume works and shows correct iteration in status."""
+        """Test that --resume works and shows completed tasks count correctly."""
         runner = CliRunner()
         prd_file = tmp_path / "PRD.md"
         prd_file.write_text("# PRD\n- [x] Task 1\n- [x] Task 2\n- [ ] Task 3")
@@ -437,11 +437,11 @@ class TestResumeCLI:
                 "--progress", str(progress_file),
                 "--resume",
                 "--dry-run",
+                "--no-tui",
+                "-n", "1",  # Limit iterations
             ])
-            # LiveDisplay shows status with iteration info
-            assert "Status" in result.output
-            # Shows next task (Task 3 is incomplete)
-            assert "Task 3" in result.output
+            # PlainDisplay shows summary with task progress (2 of 3 complete)
+            assert "2/3" in result.output
 
 
 class TestSandboxMode:
@@ -818,11 +818,12 @@ class TestVerboseModeTiming:
             max_iterations=1,
             delay=0,
             auto_commit=False,
+            tui_enabled=False,  # Use PlainDisplay for capturable output
         )
         runner.run()
 
         captured = capsys.readouterr()
-        # LiveDisplay outputs to stdout, verbose log messages are in the Log panel
+        # PlainDisplay outputs verbose log messages to stdout
         assert "Elapsed time:" in captured.out
 
     @patch("zoyd.loop.invoke_claude")
@@ -844,11 +845,12 @@ class TestVerboseModeTiming:
             max_iterations=1,
             delay=0,
             auto_commit=False,
+            tui_enabled=False,  # Use PlainDisplay for capturable output
         )
         runner.run()
 
         captured = capsys.readouterr()
-        # LiveDisplay outputs to stdout, verbose log messages are in the Log panel
+        # PlainDisplay outputs verbose log messages to stdout
         assert "Iteration 1 completed in" in captured.out
 
     def test_no_timing_in_non_verbose_mode(self, tmp_path, capsys):
@@ -904,7 +906,7 @@ class TestSummaryStatistics:
         prd_file.write_text("# PRD\n- [x] Task 1\n- [x] Task 2")
         progress_file = tmp_path / "progress.txt"
 
-        runner = LoopRunner(prd_path=prd_file, progress_path=progress_file)
+        runner = LoopRunner(prd_path=prd_file, progress_path=progress_file, tui_enabled=False)
         exit_code = runner.run()
 
         assert exit_code == 0
@@ -932,6 +934,7 @@ class TestSummaryStatistics:
             max_iterations=1,
             delay=0,
             auto_commit=False,
+            tui_enabled=False,  # Use PlainDisplay for capturable output
         )
         exit_code = runner.run()
 
@@ -960,6 +963,7 @@ class TestSummaryStatistics:
             max_iterations=2,
             delay=0,
             auto_commit=False,
+            tui_enabled=False,  # Use PlainDisplay for capturable output
         )
         exit_code = runner.run()
 
@@ -987,6 +991,7 @@ class TestSummaryStatistics:
             max_iterations=10,
             delay=0,
             auto_commit=False,
+            tui_enabled=False,  # Use PlainDisplay for capturable output
         )
         exit_code = runner.run()
 
@@ -1013,6 +1018,7 @@ class TestSummaryStatistics:
             fail_fast=True,
             delay=0,
             auto_commit=False,
+            tui_enabled=False,  # Use PlainDisplay for capturable output
         )
         exit_code = runner.run()
 
@@ -1034,6 +1040,7 @@ class TestSummaryStatistics:
             max_iterations=1,
             dry_run=True,  # Dry run so we don't actually invoke Claude
             delay=0,
+            tui_enabled=False,  # Use PlainDisplay for capturable output
         )
         runner.run()
 
@@ -1052,6 +1059,7 @@ class TestSummaryStatistics:
             progress_path=progress_file,
             max_iterations=1,
             delay=0,
+            tui_enabled=False,  # Use PlainDisplay for capturable output
         )
         runner.run()
 
@@ -1154,8 +1162,8 @@ class TestInitCommand:
 class TestPrdValidationCLI:
     """Tests for PRD validation in CLI.
 
-    Note: All tests use -n 1 to limit iterations and keep output manageable,
-    preventing validation warnings from scrolling out of the Live display log.
+    Note: All tests use --no-tui to get capturable output (screen=True uses alternate buffer),
+    and -n 1 to limit iterations and keep output manageable.
     """
 
     def test_valid_prd_no_warnings(self, tmp_path):
@@ -1165,7 +1173,7 @@ class TestPrdValidationCLI:
         prd_file.write_text("# Project\n- [ ] Valid task\n- [x] Completed task\n")
         progress_file = tmp_path / "progress.txt"
 
-        result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--progress", str(progress_file), "--dry-run", "-n", "1"])
+        result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--progress", str(progress_file), "--dry-run", "-n", "1", "--no-tui"])
         assert "prd validation" not in result.output.lower()
 
     def test_empty_task_text_warning(self, tmp_path):
@@ -1175,7 +1183,7 @@ class TestPrdValidationCLI:
         prd_file.write_text("# Project\n- [ ]\n- [ ] Valid task\n")
         progress_file = tmp_path / "progress.txt"
 
-        result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--progress", str(progress_file), "--dry-run", "-n", "1"])
+        result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--progress", str(progress_file), "--dry-run", "-n", "1", "--no-tui"])
         assert "prd validation" in result.output.lower()
         assert "Empty task text" in result.output
 
@@ -1186,7 +1194,7 @@ class TestPrdValidationCLI:
         prd_file.write_text("# Project\n-[]\n- [ ] Valid task\n")
         progress_file = tmp_path / "progress.txt"
 
-        result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--progress", str(progress_file), "--dry-run", "-n", "1"])
+        result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--progress", str(progress_file), "--dry-run", "-n", "1", "--no-tui"])
         assert "prd validation" in result.output.lower()
         assert "Missing space" in result.output
 
@@ -1197,7 +1205,7 @@ class TestPrdValidationCLI:
         prd_file.write_text("# Project\n- [ ]\n-[]\n- [ ] Valid task\n")
         progress_file = tmp_path / "progress.txt"
 
-        result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--progress", str(progress_file), "--dry-run", "-n", "1"])
+        result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--progress", str(progress_file), "--dry-run", "-n", "1", "--no-tui"])
         assert "prd validation" in result.output.lower()
         assert "Empty task text" in result.output
         assert "Missing space" in result.output
@@ -1209,7 +1217,7 @@ class TestPrdValidationCLI:
         prd_file.write_text("# Project\n- [ ]\n")
         progress_file = tmp_path / "progress.txt"
 
-        result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--progress", str(progress_file), "--dry-run", "-n", "1"])
+        result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--progress", str(progress_file), "--dry-run", "-n", "1", "--no-tui"])
         assert "Line 2" in result.output
 
     def test_validation_does_not_stop_execution(self, tmp_path):
@@ -1219,7 +1227,7 @@ class TestPrdValidationCLI:
         prd_file.write_text("# Project\n- [ ]\n- [ ] Valid task\n")
         progress_file = tmp_path / "progress.txt"
 
-        result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--progress", str(progress_file), "--dry-run", "-n", "1"])
+        result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--progress", str(progress_file), "--dry-run", "-n", "1", "--no-tui"])
         # Should show warning but continue to summary
         assert "prd validation" in result.output.lower()
         assert "Summary" in result.output
@@ -1278,6 +1286,7 @@ class TestMaxCost:
             max_iterations=10,
             delay=0,
             auto_commit=False,
+            tui_enabled=False,  # Use PlainDisplay for capturable output
         )
         exit_code = runner.run()
 
@@ -1325,6 +1334,7 @@ class TestMaxCost:
             progress_path=progress_file,
             max_cost=5.0,
             delay=0,
+            tui_enabled=False,  # Use PlainDisplay for capturable output
         )
         runner.run()
 
@@ -1376,6 +1386,7 @@ class TestMaxCostCLI:
             "--prd", str(prd_file),
             "--max-cost", "10.50",
             "--dry-run",
+            "--no-tui",  # Use PlainDisplay for capturable output
         ])
         # Max cost is shown in the summary at the end
         assert "Cost limit: $10.50" in result.output
