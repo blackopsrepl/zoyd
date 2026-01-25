@@ -356,6 +356,33 @@ class TestErrorPanel:
 
         assert "Test error" in rendered
 
+    def test_render_has_red_border_style(self):
+        """Verify error panel uses red border color."""
+        from zoyd.tui.panels import ErrorPanel
+        from zoyd.tui.theme import COLORS
+
+        panel = ErrorPanel()
+        panel.set_message("Error")
+        rendered = panel.render()
+
+        # Verify border_style is the error color
+        assert rendered.border_style == COLORS["error"]
+
+    def test_render_title_has_error_styling(self):
+        """Verify error panel title uses error styling."""
+        from zoyd.tui.panels import ErrorPanel
+
+        panel = ErrorPanel()
+        panel.set_message("Error")
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        console.print(panel.render())
+        rendered = output.getvalue()
+
+        # The title should contain the X icon and Error text
+        assert "Error" in rendered
+
 
 class TestCreateStatusBar:
     def test_creates_bar(self):
@@ -564,6 +591,7 @@ class TestModuleExports:
             ClaudeOutputPanel,
             ErrorPanel,
             WarningPanel,
+            BlockedTaskPanel,
             IterationHistoryPanel,
             GitCommitLogPanel,
             create_status_bar,
@@ -571,6 +599,7 @@ class TestModuleExports:
             create_claude_output_panel,
             create_error_panel,
             create_warning_panel,
+            create_blocked_task_panel,
             create_iteration_history_panel,
             create_git_commit_log_panel,
         )
@@ -580,6 +609,7 @@ class TestModuleExports:
         assert ClaudeOutputPanel is not None
         assert ErrorPanel is not None
         assert WarningPanel is not None
+        assert BlockedTaskPanel is not None
         assert IterationHistoryPanel is not None
         assert GitCommitLogPanel is not None
         assert callable(create_status_bar)
@@ -587,6 +617,7 @@ class TestModuleExports:
         assert callable(create_claude_output_panel)
         assert callable(create_error_panel)
         assert callable(create_warning_panel)
+        assert callable(create_blocked_task_panel)
         assert callable(create_iteration_history_panel)
         assert callable(create_git_commit_log_panel)
 
@@ -619,6 +650,16 @@ class TestModuleExports:
         from zoyd.tui.panels import create_git_commit_log_panel
 
         assert callable(create_git_commit_log_panel)
+
+    def test_blocked_task_panel_importable(self):
+        from zoyd.tui.panels import BlockedTaskPanel
+
+        assert BlockedTaskPanel is not None
+
+    def test_create_blocked_task_panel_importable(self):
+        from zoyd.tui.panels import create_blocked_task_panel
+
+        assert callable(create_blocked_task_panel)
 
 
 class TestWarningPanel:
@@ -1589,3 +1630,320 @@ class TestCreateGitCommitLogPanel:
 
         panel = create_git_commit_log_panel()
         assert isinstance(panel, GitCommitLogPanel)
+
+
+class TestBlockedTaskPanel:
+    def test_creates_panel(self):
+        from zoyd.tui.panels import BlockedTaskPanel
+
+        panel = BlockedTaskPanel()
+        assert panel is not None
+        assert panel.title == "Task Blocked"
+
+    def test_custom_title(self):
+        from zoyd.tui.panels import BlockedTaskPanel
+
+        panel = BlockedTaskPanel(title="Cannot Proceed")
+        assert panel.title == "Cannot Proceed"
+
+    def test_show_icon_default(self):
+        from zoyd.tui.panels import BlockedTaskPanel
+
+        panel = BlockedTaskPanel()
+        assert panel.show_icon is True
+
+    def test_show_icon_disabled(self):
+        from zoyd.tui.panels import BlockedTaskPanel
+
+        panel = BlockedTaskPanel(show_icon=False)
+        assert panel.show_icon is False
+
+    def test_set_task(self):
+        from zoyd.tui.panels import BlockedTaskPanel
+
+        panel = BlockedTaskPanel()
+        result = panel.set_task("Add authentication")
+        assert result is panel  # Returns self for chaining
+        assert panel._task == "Add authentication"
+
+    def test_set_reason(self):
+        from zoyd.tui.panels import BlockedTaskPanel
+
+        panel = BlockedTaskPanel()
+        result = panel.set_reason("Missing dependencies")
+        assert result is panel
+        assert panel._reason == "Missing dependencies"
+
+    def test_add_blocker(self):
+        from zoyd.tui.panels import BlockedTaskPanel
+
+        panel = BlockedTaskPanel()
+        result = panel.add_blocker("Database not configured")
+        assert result is panel
+        assert len(panel._blockers) == 1
+        assert panel._blockers[0] == "Database not configured"
+
+    def test_add_multiple_blockers(self):
+        from zoyd.tui.panels import BlockedTaskPanel
+
+        panel = BlockedTaskPanel()
+        panel.add_blocker("Blocker 1").add_blocker("Blocker 2").add_blocker("Blocker 3")
+        assert len(panel._blockers) == 3
+
+    def test_add_suggestion(self):
+        from zoyd.tui.panels import BlockedTaskPanel
+
+        panel = BlockedTaskPanel()
+        result = panel.add_suggestion("Install required packages")
+        assert result is panel
+        assert len(panel._suggestions) == 1
+        assert panel._suggestions[0] == "Install required packages"
+
+    def test_add_multiple_suggestions(self):
+        from zoyd.tui.panels import BlockedTaskPanel
+
+        panel = BlockedTaskPanel()
+        panel.add_suggestion("Suggestion 1").add_suggestion("Suggestion 2")
+        assert len(panel._suggestions) == 2
+
+    def test_method_chaining(self):
+        from zoyd.tui.panels import BlockedTaskPanel
+
+        panel = BlockedTaskPanel()
+        panel.set_task("Task").set_reason("Reason").add_blocker("Blocker").add_suggestion(
+            "Suggestion"
+        )
+        assert panel._task == "Task"
+        assert panel._reason == "Reason"
+        assert len(panel._blockers) == 1
+        assert len(panel._suggestions) == 1
+
+    def test_clear(self):
+        from zoyd.tui.panels import BlockedTaskPanel
+
+        panel = BlockedTaskPanel()
+        panel.set_task("Task").set_reason("Reason").add_blocker("Blocker").add_suggestion(
+            "Suggestion"
+        )
+        result = panel.clear()
+        assert result is panel
+        assert panel._task is None
+        assert panel._reason is None
+        assert len(panel._blockers) == 0
+        assert len(panel._suggestions) == 0
+
+    def test_render_returns_panel(self):
+        from rich.panel import Panel
+
+        from zoyd.tui.panels import BlockedTaskPanel
+
+        panel = BlockedTaskPanel()
+        panel.set_task("Blocked task")
+        rendered = panel.render()
+        assert isinstance(rendered, Panel)
+
+    def test_render_contains_task(self):
+        from zoyd.tui.panels import BlockedTaskPanel
+
+        panel = BlockedTaskPanel()
+        panel.set_task("Add user authentication")
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        console.print(panel.render())
+        rendered = output.getvalue()
+
+        assert "Task" in rendered
+        assert "Add user authentication" in rendered
+
+    def test_render_contains_reason(self):
+        from zoyd.tui.panels import BlockedTaskPanel
+
+        panel = BlockedTaskPanel()
+        panel.set_task("Task").set_reason("Missing API keys")
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        console.print(panel.render())
+        rendered = output.getvalue()
+
+        assert "Reason" in rendered
+        assert "Missing API keys" in rendered
+
+    def test_render_contains_blockers(self):
+        from zoyd.tui.panels import BlockedTaskPanel
+
+        panel = BlockedTaskPanel()
+        panel.set_task("Task").add_blocker("Database unavailable").add_blocker(
+            "Config missing"
+        )
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        console.print(panel.render())
+        rendered = output.getvalue()
+
+        assert "Blockers" in rendered
+        assert "Database unavailable" in rendered
+        assert "Config missing" in rendered
+
+    def test_render_contains_suggestions(self):
+        from zoyd.tui.panels import BlockedTaskPanel
+
+        panel = BlockedTaskPanel()
+        panel.set_task("Task").add_suggestion("Run setup script").add_suggestion(
+            "Check documentation"
+        )
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        console.print(panel.render())
+        rendered = output.getvalue()
+
+        assert "Suggestions" in rendered
+        assert "Run setup script" in rendered
+        assert "Check documentation" in rendered
+
+    def test_render_empty_panel(self):
+        from rich.panel import Panel
+
+        from zoyd.tui.panels import BlockedTaskPanel
+
+        panel = BlockedTaskPanel()
+        rendered = panel.render()
+        assert isinstance(rendered, Panel)
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        console.print(rendered)
+        text = output.getvalue()
+
+        # Should show default message
+        assert "blocked" in text.lower()
+
+    def test_render_full_content(self):
+        from zoyd.tui.panels import BlockedTaskPanel
+
+        panel = BlockedTaskPanel()
+        panel.set_task("Implement feature X")
+        panel.set_reason("Dependency not available")
+        panel.add_blocker("Package Y not installed")
+        panel.add_blocker("API endpoint down")
+        panel.add_suggestion("Install Y with pip")
+        panel.add_suggestion("Check network connection")
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        console.print(panel.render())
+        rendered = output.getvalue()
+
+        assert "Implement feature X" in rendered
+        assert "Dependency not available" in rendered
+        assert "Package Y not installed" in rendered
+        assert "API endpoint down" in rendered
+        assert "Install Y with pip" in rendered
+        assert "Check network connection" in rendered
+
+    def test_render_has_blocked_border_style(self):
+        """Verify blocked task panel uses blocked color for border."""
+        from zoyd.tui.panels import BlockedTaskPanel
+        from zoyd.tui.theme import COLORS
+
+        panel = BlockedTaskPanel()
+        panel.set_task("Blocked task")
+        rendered = panel.render()
+
+        # Verify border_style is the blocked color
+        assert rendered.border_style == COLORS["blocked"]
+
+    def test_print_method(self):
+        from zoyd.tui.panels import BlockedTaskPanel
+
+        panel = BlockedTaskPanel()
+        panel.set_task("Test blocked task")
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        panel.print(console)
+        rendered = output.getvalue()
+
+        assert "Test blocked task" in rendered
+
+
+class TestCreateBlockedTaskPanel:
+    def test_creates_panel(self):
+        from zoyd.tui.panels import create_blocked_task_panel
+
+        panel = create_blocked_task_panel("Blocked task")
+        assert panel is not None
+        assert panel._task == "Blocked task"
+
+    def test_custom_title(self):
+        from zoyd.tui.panels import create_blocked_task_panel
+
+        panel = create_blocked_task_panel("Task", title="Cannot Complete")
+        assert panel.title == "Cannot Complete"
+
+    def test_with_reason(self):
+        from zoyd.tui.panels import create_blocked_task_panel
+
+        panel = create_blocked_task_panel("Task", reason="Missing config")
+        assert panel._reason == "Missing config"
+
+    def test_with_blockers(self):
+        from zoyd.tui.panels import create_blocked_task_panel
+
+        blockers = ["Blocker A", "Blocker B"]
+        panel = create_blocked_task_panel("Task", blockers=blockers)
+        assert len(panel._blockers) == 2
+        assert panel._blockers[0] == "Blocker A"
+        assert panel._blockers[1] == "Blocker B"
+
+    def test_with_suggestions(self):
+        from zoyd.tui.panels import create_blocked_task_panel
+
+        suggestions = ["Suggestion 1", "Suggestion 2", "Suggestion 3"]
+        panel = create_blocked_task_panel("Task", suggestions=suggestions)
+        assert len(panel._suggestions) == 3
+
+    def test_all_options(self):
+        from zoyd.tui.panels import create_blocked_task_panel
+
+        panel = create_blocked_task_panel(
+            "Add feature X",
+            reason="Dependencies missing",
+            blockers=["Package A not installed", "Service B down"],
+            suggestions=["Install A", "Check network"],
+            title="Feature Blocked",
+        )
+        assert panel.title == "Feature Blocked"
+        assert panel._task == "Add feature X"
+        assert panel._reason == "Dependencies missing"
+        assert len(panel._blockers) == 2
+        assert len(panel._suggestions) == 2
+
+    def test_returns_blocked_task_panel_instance(self):
+        from zoyd.tui.panels import BlockedTaskPanel, create_blocked_task_panel
+
+        panel = create_blocked_task_panel("Task")
+        assert isinstance(panel, BlockedTaskPanel)
+
+    def test_render_factory_created_panel(self):
+        from zoyd.tui.panels import create_blocked_task_panel
+
+        panel = create_blocked_task_panel(
+            "Deploy to production",
+            reason="Tests failing",
+            blockers=["Unit tests: 3 failures", "Integration tests: 1 timeout"],
+            suggestions=["Fix test_auth.py", "Increase timeout in config"],
+        )
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        panel.print(console)
+        rendered = output.getvalue()
+
+        assert "Deploy to production" in rendered
+        assert "Tests failing" in rendered
+        assert "Unit tests: 3 failures" in rendered
+        assert "Fix test_auth.py" in rendered

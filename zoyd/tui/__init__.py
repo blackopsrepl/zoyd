@@ -27,6 +27,7 @@ from zoyd.tui.panels import (
     ClaudeOutputPanel,
     ErrorPanel,
     WarningPanel,
+    BlockedTaskPanel,
     IterationHistoryPanel,
     GitCommitLogPanel,
     create_status_bar,
@@ -34,6 +35,7 @@ from zoyd.tui.panels import (
     create_claude_output_panel,
     create_error_panel,
     create_warning_panel,
+    create_blocked_task_panel,
     create_iteration_history_panel,
     create_git_commit_log_panel,
 )
@@ -94,6 +96,7 @@ __all__ = [
     "ClaudeOutputPanel",
     "ErrorPanel",
     "WarningPanel",
+    "BlockedTaskPanel",
     "IterationHistoryPanel",
     "GitCommitLogPanel",
     "create_status_bar",
@@ -101,6 +104,7 @@ __all__ = [
     "create_claude_output_panel",
     "create_error_panel",
     "create_warning_panel",
+    "create_blocked_task_panel",
     "create_iteration_history_panel",
     "create_git_commit_log_panel",
     # Status rendering
