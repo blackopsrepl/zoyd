@@ -241,8 +241,9 @@ class TestCLIConfigIntegration:
             Path("status_test.md").write_text("# Test\n- [x] Done\n- [ ] Todo\n")
 
             result = runner.invoke(cli, ["status"])
-            assert "PRD: status_test.md" in result.output
-            assert "Tasks: 1/2 complete" in result.output
+            # Rich TUI output has table formatting with extra whitespace
+            assert "status_test.md" in result.output
+            assert "1/2" in result.output  # Progress bar shows (1/2)
 
     def test_status_cli_overrides_config(self, tmp_path):
         """status CLI options override config values."""
@@ -254,8 +255,9 @@ class TestCLIConfigIntegration:
             Path("override.md").write_text("# Override\n- [x] Done\n")
 
             result = runner.invoke(cli, ["status", "--prd", "override.md"])
-            assert "PRD: override.md" in result.output
-            assert "Tasks: 1/1 complete" in result.output
+            # Rich TUI output has table formatting with extra whitespace
+            assert "override.md" in result.output
+            assert "1/1" in result.output  # Progress bar shows (1/1)
 
     def test_run_model_from_config(self, tmp_path):
         """run command uses model from config."""

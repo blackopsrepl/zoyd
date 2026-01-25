@@ -9,6 +9,8 @@ import click
 from . import __version__, prd, progress
 from .config import load_config
 from .loop import LoopRunner
+from .tui.console import create_console
+from .tui.status import print_status
 
 
 @click.group()
@@ -331,28 +333,19 @@ def status(prd_path: Path | None, progress_path: Path | None, json_output: bool)
         click.echo(json.dumps(output, indent=2))
         sys.exit(0 if is_complete else 1)
 
-    click.echo(f"PRD: {prd_path}")
-    click.echo(f"Tasks: {completed}/{total} complete")
-    click.echo()
+    # Use rich TUI components for display
+    # Create a fresh console that writes to current stdout (important for test runners)
+    console = create_console(file=sys.stdout)
+    print_status(
+        console,
+        tasks,
+        prd_path=prd_path,
+        iterations=iteration_count,
+        show_tree=True,
+        show_progress=True,
+    )
 
-    if tasks:
-        click.echo("Tasks:")
-        for task in tasks:
-            marker = "[x]" if task.complete else "[ ]"
-            click.echo(f"  {marker} {task.text}")
-        click.echo()
-
-    if iteration_count > 0:
-        click.echo(f"Iterations completed: {iteration_count}")
-
-    if is_complete:
-        click.echo("\nStatus: COMPLETE")
-        sys.exit(0)
-    else:
-        click.echo("\nStatus: IN PROGRESS")
-        if next_task:
-            click.echo(f"Next task: {next_task.text}")
-        sys.exit(1)
+    sys.exit(0 if is_complete else 1)
 
 
 if __name__ == "__main__":
