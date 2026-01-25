@@ -66,10 +66,8 @@ from zoyd.tui.spinners import (
 from zoyd.tui.live import (
     LiveDisplay,
     PlainDisplay,
-    DashboardDisplay,
     create_live_display,
     create_plain_display,
-    create_dashboard_display,
 )
 
 # Re-export event system
@@ -81,8 +79,6 @@ from zoyd.tui.events import (
     create_event_emitter,
 )
 
-# Dashboard components
-from zoyd.tui.dashboard import Dashboard, DashboardState, create_dashboard
 
 # Traceback handler
 from zoyd.tui.traceback import (
@@ -134,10 +130,8 @@ __all__ = [
     # Live display
     "LiveDisplay",
     "PlainDisplay",
-    "DashboardDisplay",
     "create_live_display",
     "create_plain_display",
-    "create_dashboard_display",
     # Spinner components
     "MindFlayerSpinner",
     "SPINNER_DEFS",
@@ -152,10 +146,6 @@ __all__ = [
     "Event",
     "EventHandler",
     "create_event_emitter",
-    # Dashboard
-    "Dashboard",
-    "DashboardState",
-    "create_dashboard",
     # Traceback handler
     "install_traceback_handler",
     "ensure_traceback_installed",

@@ -14,10 +14,8 @@ from . import prd, progress
 from .tui.console import create_console
 from .tui.events import EventEmitter, EventType
 from .tui.live import (
-    DashboardDisplay,
     LiveDisplay,
     PlainDisplay,
-    create_dashboard_display,
     create_live_display,
     create_plain_display,
 )
@@ -308,7 +306,6 @@ class LoopRunner:
         fail_fast: bool = False,
         max_cost: float | None = None,
         tui_enabled: bool = True,
-        fullscreen: bool = False,
         tui_refresh_rate: float = 4.0,
         tui_compact: bool = False,
     ):
@@ -324,28 +321,16 @@ class LoopRunner:
         self.fail_fast = fail_fast
         self.max_cost = max_cost
         self.tui_enabled = tui_enabled
-        self.fullscreen = fullscreen
         self.tui_refresh_rate = tui_refresh_rate
         self.tui_compact = tui_compact
-        # Create display for output (fullscreen dashboard, TUI, or plain depending on settings)
+        # Create display for output (TUI or plain depending on settings)
         if not tui_enabled:
-            self.live: LiveDisplay | PlainDisplay | DashboardDisplay = create_plain_display(
+            self.live: LiveDisplay | PlainDisplay = create_plain_display(
                 prd_path=str(self.prd_path),
                 progress_path=str(self.progress_path),
                 max_iterations=self.max_iterations,
                 model=self.model,
                 max_cost=self.max_cost,
-            )
-        elif fullscreen:
-            self.live = create_dashboard_display(
-                create_console(),
-                prd_path=str(self.prd_path),
-                progress_path=str(self.progress_path),
-                max_iterations=self.max_iterations,
-                model=self.model,
-                max_cost=self.max_cost,
-                compact=tui_compact,
-                refresh_per_second=int(tui_refresh_rate),
             )
         else:
             self.live = create_live_display(

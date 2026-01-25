@@ -25,7 +25,6 @@ class TestZoydConfig:
         assert config.max_cost is None
         # TUI defaults
         assert config.tui_enabled is True
-        assert config.tui_fullscreen is False
         assert config.tui_refresh_rate == 4.0
         assert config.tui_compact is False
 
@@ -43,7 +42,6 @@ class TestZoydConfig:
             "max_cost": 10.0,
             # TUI options
             "tui_enabled": False,
-            "tui_fullscreen": True,
             "tui_refresh_rate": 10.0,
             "tui_compact": True,
         }
@@ -59,7 +57,6 @@ class TestZoydConfig:
         assert config.max_cost == 10.0
         # TUI options
         assert config.tui_enabled is False
-        assert config.tui_fullscreen is True
         assert config.tui_refresh_rate == 10.0
         assert config.tui_compact is True
 
@@ -400,13 +397,12 @@ class TestConfigurationPanelCLI:
 
 
 class TestTUIConfigOptions:
-    """Tests for TUI config options (tui_enabled, tui_fullscreen, tui_refresh_rate, tui_compact)."""
+    """Tests for TUI config options (tui_enabled, tui_refresh_rate, tui_compact)."""
 
     def test_tui_config_defaults_in_zoy_config(self):
         """TUI options have correct defaults in ZoydConfig."""
         config = ZoydConfig()
         assert config.tui_enabled is True
-        assert config.tui_fullscreen is False
         assert config.tui_refresh_rate == 4.0
         assert config.tui_compact is False
 
@@ -414,13 +410,11 @@ class TestTUIConfigOptions:
         """TUI options can be loaded from dict (TOML file)."""
         data = {
             "tui_enabled": False,
-            "tui_fullscreen": True,
             "tui_refresh_rate": 10.0,
             "tui_compact": True,
         }
         config = ZoydConfig.from_dict(data)
         assert config.tui_enabled is False
-        assert config.tui_fullscreen is True
         assert config.tui_refresh_rate == 10.0
         assert config.tui_compact is True
 
@@ -429,13 +423,11 @@ class TestTUIConfigOptions:
         config_file = tmp_path / CONFIG_FILENAME
         config_file.write_text("""
 tui_enabled = false
-tui_fullscreen = true
 tui_refresh_rate = 8.0
 tui_compact = true
 """)
         config = load_config(config_file)
         assert config.tui_enabled is False
-        assert config.tui_fullscreen is True
         assert config.tui_refresh_rate == 8.0
         assert config.tui_compact is True
 
@@ -463,29 +455,3 @@ tui_compact = true
             result = runner.invoke(cli, ["run", "--dry-run", "--no-tui"])
             # With --no-tui, we get plain text output
             assert "Zoyd - Autonomous Loop" in result.output
-
-    def test_fullscreen_config_option(self, tmp_path):
-        """tui_fullscreen config option is applied."""
-        runner = CliRunner()
-        with runner.isolated_filesystem(temp_dir=tmp_path):
-            # Create config with fullscreen enabled
-            Path("zoyd.toml").write_text('prd = "test.md"\ntui_fullscreen = true\n')
-            # Use completed task so we get exit code 0
-            Path("test.md").write_text("# Test\n- [x] Task\n")
-
-            result = runner.invoke(cli, ["run", "--dry-run"])
-            # Fullscreen mode uses DashboardDisplay - exit 0 when all tasks complete
-            assert result.exit_code == 0
-
-    def test_fullscreen_flag_overrides_config(self, tmp_path):
-        """--fullscreen CLI flag overrides tui_fullscreen config."""
-        runner = CliRunner()
-        with runner.isolated_filesystem(temp_dir=tmp_path):
-            # Config has fullscreen disabled, but CLI enables it
-            Path("zoyd.toml").write_text('prd = "test.md"\ntui_fullscreen = false\n')
-            # Use completed task so we get exit code 0
-            Path("test.md").write_text("# Test\n- [x] Task\n")
-
-            result = runner.invoke(cli, ["run", "--dry-run", "--fullscreen"])
-            # Test completes successfully
-            assert result.exit_code == 0

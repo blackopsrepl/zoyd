@@ -29,7 +29,6 @@ class ZoydConfig:
     max_cost: float | None = None
     # TUI options
     tui_enabled: bool = True
-    tui_fullscreen: bool = False
     tui_refresh_rate: float = 4.0  # Dashboard refresh rate in Hz
     tui_compact: bool = False  # Use compact banner for narrow terminals
 
@@ -58,8 +57,6 @@ class ZoydConfig:
         # TUI options
         if "tui_enabled" in data:
             config.tui_enabled = bool(data["tui_enabled"])
-        if "tui_fullscreen" in data:
-            config.tui_fullscreen = bool(data["tui_fullscreen"])
         if "tui_refresh_rate" in data:
             config.tui_refresh_rate = float(data["tui_refresh_rate"])
         if "tui_compact" in data:
