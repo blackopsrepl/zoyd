@@ -2,7 +2,7 @@
 
 import pytest
 
-from ralph.prd import (
+from zoyd.prd import (
     Task,
     parse_tasks,
     get_completion_status,

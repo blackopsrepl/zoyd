@@ -1,8 +1,8 @@
-# Ralph
+# Zoyd
 
 Minimal autonomous agent loop for Claude Code.
 
-Ralph repeatedly invokes Claude Code against a PRD file, tracking progress across iterations. Each iteration gets fresh context, and tasks are marked complete when their checkbox is checked (`[x]`).
+Zoyd repeatedly invokes Claude Code against a PRD file, tracking progress across iterations. Each iteration gets fresh context, and tasks are marked complete when their checkbox is checked (`[x]`).
 
 ## Installation
 
@@ -16,31 +16,31 @@ pip install -e .
 
 ```bash
 # Run with defaults (PRD.md in current directory)
-ralph run
+zoyd run
 
 # Custom PRD file and iteration limit
-ralph run --prd SPEC.md -n 20
+zoyd run --prd SPEC.md -n 20
 
 # Use a specific model
-ralph run --model opus
+zoyd run --model opus
 
 # Dry run - show prompts without executing
-ralph run --dry-run
+zoyd run --dry-run
 
 # Verbose output
-ralph run -v
+zoyd run -v
 ```
 
 ### Check status
 
 ```bash
-ralph status              # Show completion status
-ralph status --prd SPEC.md
+zoyd status              # Show completion status
+zoyd status --prd SPEC.md
 ```
 
 ## PRD Format
 
-Ralph parses markdown checkboxes to track tasks:
+Zoyd parses markdown checkboxes to track tasks:
 
 ```markdown
 # Project: My App
@@ -59,7 +59,7 @@ Additional context for Claude goes here.
 
 ## How It Works
 
-1. Ralph reads the PRD and progress files
+1. Zoyd reads the PRD and progress files
 2. If all tasks are complete (`[x]`), exit successfully
 3. Build a prompt with PRD content, progress log, and iteration info
 4. Invoke Claude Code with `--print --permission-mode acceptEdits`
@@ -96,9 +96,9 @@ cat > PRD.md << 'EOF'
 - [ ] Add a greet(name) function
 EOF
 
-# Run Ralph
-ralph run -n 5
+# Run Zoyd
+zoyd run -n 5
 
 # Check status
-ralph status
+zoyd status
 ```

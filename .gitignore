@@ -3,5 +3,8 @@ __pycache__/
 *.egg-info/
 .venv/
 .pytest_cache/
+
+# Zoyd runtime files
+/PRD.md
 progress.txt
-CLAUDE.md
+.zoyd-jails/

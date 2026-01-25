@@ -34,17 +34,32 @@ def get_iteration_count(content: str) -> int:
     return count
 
 
-def append_iteration(path: Path, iteration: int, output: str) -> None:
+def append_iteration(
+    path: Path,
+    iteration: int,
+    output: str,
+    cannot_complete: bool = False,
+    cannot_complete_reason: str | None = None,
+) -> None:
     """Append a new iteration entry to the progress file.
 
     Args:
         path: Path to progress file.
         iteration: Iteration number.
         output: Claude's output for this iteration.
+        cannot_complete: Whether Claude indicated it cannot complete the task.
+        cannot_complete_reason: The matched phrase indicating inability to complete.
     """
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    entry = f"\n## Iteration {iteration} - {timestamp}\n\n{output}\n"
+    if cannot_complete:
+        status = " [BLOCKED]"
+        reason_line = f"\n**Blocked reason:** {cannot_complete_reason}\n" if cannot_complete_reason else ""
+    else:
+        status = ""
+        reason_line = ""
+
+    entry = f"\n## Iteration {iteration} - {timestamp}{status}\n{reason_line}\n{output}\n"
 
     with path.open("a") as f:
         f.write(entry)
@@ -57,4 +72,4 @@ def init_progress_file(path: Path) -> None:
         path: Path to progress file.
     """
     if not path.exists():
-        path.write_text("# Ralph Progress Log\n")
+        path.write_text("# Zoyd Progress Log\n")

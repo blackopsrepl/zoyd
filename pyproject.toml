@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ralph"
+name = "zoyd"
 version = "0.1.0"
 description = "Minimal autonomous agent loop for Claude Code"
 readme = "README.md"
@@ -18,7 +18,7 @@ dev = [
 ]
 
 [project.scripts]
-ralph = "ralph.cli:cli"
+zoyd = "zoyd.cli:cli"
 
 [tool.setuptools.packages.find]
 where = ["."]

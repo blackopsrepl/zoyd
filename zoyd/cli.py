@@ -1,4 +1,4 @@
-"""Click CLI entry point for Ralph."""
+"""Click CLI entry point for Zoyd."""
 
 import sys
 from pathlib import Path
@@ -12,7 +12,7 @@ from .loop import LoopRunner
 @click.group()
 @click.version_option(version=__version__)
 def cli():
-    """Ralph - Minimal autonomous agent loop for Claude Code."""
+    """Zoyd - Minimal autonomous agent loop for Claude Code."""
     pass
 
 
@@ -54,6 +54,29 @@ def cli():
     is_flag=True,
     help="Enable verbose output",
 )
+@click.option(
+    "--delay",
+    default=1.0,
+    type=float,
+    help="Seconds to pause between iterations (default: 1.0)",
+)
+@click.option(
+    "--auto-commit",
+    is_flag=True,
+    help="Automatically commit changes after each completed task",
+)
+@click.option(
+    "--resume",
+    is_flag=True,
+    help="Resume from existing progress file (skip already-completed tasks)",
+)
+@click.option(
+    "--jail-dir",
+    "jail_dir",
+    default=None,
+    type=click.Path(dir_okay=True, file_okay=False, path_type=Path),
+    help="Directory for jail worktrees (default: .zoyd-jails/ in repo root)",
+)
 def run(
     prd_path: Path,
     progress_path: Path,
@@ -61,16 +84,48 @@ def run(
     model: str | None,
     dry_run: bool,
     verbose: bool,
+    delay: float,
+    auto_commit: bool,
+    resume: bool,
+    jail_dir: Path | None,
 ):
-    """Run the Ralph loop against a PRD file."""
-    click.echo(f"Ralph v{__version__}")
+    """Run the Zoyd loop against a PRD file.
+
+    Zoyd operates exclusively in jail mode using git worktrees and sandbox
+    isolation. Changes are made in an isolated worktree and merged back
+    to the source repository on completion.
+    """
+    click.echo(f"Zoyd v{__version__}")
     click.echo(f"PRD: {prd_path}")
     click.echo(f"Progress: {progress_path}")
     click.echo(f"Max iterations: {max_iterations}")
+    click.echo("Mode: JAIL (worktree + sandbox isolation)")
+    if jail_dir:
+        click.echo(f"Jail directory: {jail_dir}")
     if model:
         click.echo(f"Model: {model}")
     if dry_run:
         click.echo("Mode: DRY RUN")
+
+    # Handle resume mode
+    if resume:
+        if not progress_path.exists():
+            click.echo(f"Error: Cannot resume - progress file '{progress_path}' does not exist", err=True)
+            sys.exit(1)
+        progress_content = progress_path.read_text()
+        iteration_count = progress.get_iteration_count(progress_content)
+        if iteration_count == 0:
+            click.echo("Warning: Progress file exists but has no iterations recorded")
+        else:
+            click.echo(f"Resuming from iteration {iteration_count + 1}")
+        # Show completed tasks
+        prd_content = prd.read_prd(prd_path)
+        tasks = prd.parse_tasks(prd_content)
+        completed_tasks = [t for t in tasks if t.complete]
+        if completed_tasks:
+            click.echo(f"Skipping {len(completed_tasks)} completed task(s):")
+            for task in completed_tasks:
+                click.echo(f"  [x] {task.text}")
 
     runner = LoopRunner(
         prd_path=prd_path,
@@ -79,6 +134,10 @@ def run(
         model=model,
         dry_run=dry_run,
         verbose=verbose,
+        delay=delay,
+        auto_commit=auto_commit,
+        resume=resume,
+        jail_dir=jail_dir,
     )
 
     exit_code = runner.run()
@@ -102,7 +161,6 @@ def run(
 )
 def status(prd_path: Path, progress_path: Path):
     """Show PRD completion status."""
-    # Read and parse PRD
     prd_content = prd.read_prd(prd_path)
     tasks = prd.parse_tasks(prd_content)
     completed, total = prd.get_completion_status(tasks)
@@ -118,13 +176,11 @@ def status(prd_path: Path, progress_path: Path):
             click.echo(f"  {marker} {task.text}")
         click.echo()
 
-    # Show iteration count if progress exists
     if progress_path.exists():
         progress_content = progress.read_progress(progress_path)
         iteration_count = progress.get_iteration_count(progress_content)
         click.echo(f"Iterations completed: {iteration_count}")
 
-    # Exit with appropriate code
     if prd.is_all_complete(tasks):
         click.echo("\nStatus: COMPLETE")
         sys.exit(0)
