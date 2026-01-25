@@ -15,8 +15,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+redis = [
+    "redis>=5.0",
+]
 dev = [
     "pytest>=7.0",
+    "redis>=5.0",
 ]
 
 [project.scripts]

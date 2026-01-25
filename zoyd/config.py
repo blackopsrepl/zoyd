@@ -34,6 +34,12 @@ class ZoydConfig:
     # Session logging options
     session_logging: bool = False  # Enable persistent session logging
     sessions_dir: str = ".zoyd/sessions"  # Directory for session files
+    # Redis storage backend options
+    storage_backend: str = "file"  # Storage backend: "file" or "redis"
+    redis_host: str = "localhost"  # Redis server hostname
+    redis_port: int = 6379  # Redis server port
+    redis_db: int = 0  # Redis database number
+    redis_password: str | None = None  # Redis password (optional)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "ZoydConfig":
@@ -69,6 +75,17 @@ class ZoydConfig:
             config.session_logging = bool(data["session_logging"])
         if "sessions_dir" in data:
             config.sessions_dir = str(data["sessions_dir"])
+        # Redis storage backend options
+        if "storage_backend" in data:
+            config.storage_backend = str(data["storage_backend"])
+        if "redis_host" in data:
+            config.redis_host = str(data["redis_host"])
+        if "redis_port" in data:
+            config.redis_port = int(data["redis_port"])
+        if "redis_db" in data:
+            config.redis_db = int(data["redis_db"])
+        if "redis_password" in data:
+            config.redis_password = str(data["redis_password"]) if data["redis_password"] else None
         return config
 
 
