@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 
 from . import prd, progress
+from .session.logger import SessionLogger
 from .tui.console import create_console
 from .tui.events import EventEmitter, EventType
 from .tui.live import (
@@ -308,6 +309,8 @@ class LoopRunner:
         tui_enabled: bool = True,
         tui_refresh_rate: float = 4.0,
         tui_compact: bool = False,
+        session_logging: bool = False,
+        sessions_dir: str = ".zoyd/sessions",
     ):
         self.prd_path = prd_path.resolve()
         self.progress_path = progress_path.resolve()
@@ -323,6 +326,8 @@ class LoopRunner:
         self.tui_enabled = tui_enabled
         self.tui_refresh_rate = tui_refresh_rate
         self.tui_compact = tui_compact
+        self.session_logging = session_logging
+        self.sessions_dir = sessions_dir
         # Create display for output (TUI or plain depending on settings)
         if not tui_enabled:
             self.live: LiveDisplay | PlainDisplay = create_plain_display(
@@ -357,6 +362,11 @@ class LoopRunner:
         self.stats_total_cost: float = 0.0
         # Event emitter for TUI dashboard integration
         self.events = EventEmitter()
+        # Session logger for persistent logging
+        self.session_logger: SessionLogger | None = None
+        if self.session_logging:
+            self.session_logger = SessionLogger(sessions_dir=self.sessions_dir)
+            self.session_logger.subscribe_to(self.events)
 
     def get_backoff_delay(self) -> float:
         """Calculate exponential backoff delay based on consecutive failures.
@@ -425,6 +435,19 @@ class LoopRunner:
         # Track run start time
         self.start_time = time.time()
 
+        # Start session logging if enabled
+        if self.session_logger is not None:
+            self.session_logger.start_session(
+                working_dir=str(Path.cwd()),
+                prd_path=str(self.prd_path),
+                progress_path=str(self.progress_path),
+                model=self.model,
+                max_iterations=self.max_iterations,
+                max_cost=self.max_cost,
+                auto_commit=self.auto_commit,
+                fail_fast=self.fail_fast,
+            )
+
         # Emit LOOP_START event
         self.events.emit(EventType.LOOP_START, {
             "prd_path": str(self.prd_path),
@@ -438,6 +461,8 @@ class LoopRunner:
         if not self.prd_path.exists():
             print(f"Error: PRD file not found: {self.prd_path}")
             print("Make sure the PRD file exists before running zoyd.")
+            if self.session_logger is not None:
+                self.session_logger.end_session(exit_code=1, exit_reason="prd_not_found")
             return 1
 
         # Initialize progress file (skip if resuming to preserve existing progress)
@@ -508,6 +533,8 @@ class LoopRunner:
                             "iterations": self.stats_iterations,
                             "total_cost": self.stats_total_cost,
                         })
+                        if self.session_logger is not None:
+                            self.session_logger.end_session(exit_code=0, exit_reason="complete")
                         self.print_summary()
                         return 0
 
@@ -558,6 +585,7 @@ class LoopRunner:
                             "return_code": return_code,
                             "cost_usd": cost_usd,
                             "output_length": len(output),
+                            "output": output,
                         })
                     else:
                         self.events.emit(EventType.CLAUDE_ERROR, {
@@ -597,6 +625,8 @@ class LoopRunner:
                                 "iterations": self.stats_iterations,
                                 "total_cost": self.stats_total_cost,
                             })
+                            if self.session_logger is not None:
+                                self.session_logger.end_session(exit_code=4, exit_reason="cost_limit")
                             self.print_summary()
                             return 4  # Exit code 4 for cost limit exceeded
 
@@ -618,6 +648,8 @@ class LoopRunner:
                                 "iterations": self.stats_iterations,
                                 "total_cost": self.stats_total_cost,
                             })
+                            if self.session_logger is not None:
+                                self.session_logger.end_session(exit_code=2, exit_reason="fail_fast")
                             self.print_summary()
                             return 2
 
@@ -630,6 +662,8 @@ class LoopRunner:
                                 "iterations": self.stats_iterations,
                                 "total_cost": self.stats_total_cost,
                             })
+                            if self.session_logger is not None:
+                                self.session_logger.end_session(exit_code=2, exit_reason="max_failures")
                             self.print_summary()
                             return 2
 
@@ -742,6 +776,8 @@ class LoopRunner:
                     "iterations": self.stats_iterations,
                     "total_cost": self.stats_total_cost,
                 })
+                if self.session_logger is not None:
+                    self.session_logger.end_session(exit_code=1, exit_reason="max_iterations")
                 self.print_summary()
                 return 1
 
@@ -757,5 +793,7 @@ class LoopRunner:
                     "iterations": self.stats_iterations,
                     "total_cost": self.stats_total_cost,
                 })
+                if self.session_logger is not None:
+                    self.session_logger.end_session(exit_code=130, exit_reason="interrupted")
                 self.print_summary()
                 return 130

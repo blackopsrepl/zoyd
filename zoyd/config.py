@@ -31,6 +31,9 @@ class ZoydConfig:
     tui_enabled: bool = True
     tui_refresh_rate: float = 4.0  # Dashboard refresh rate in Hz
     tui_compact: bool = False  # Use compact banner for narrow terminals
+    # Session logging options
+    session_logging: bool = False  # Enable persistent session logging
+    sessions_dir: str = ".zoyd/sessions"  # Directory for session files
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "ZoydConfig":
@@ -61,6 +64,11 @@ class ZoydConfig:
             config.tui_refresh_rate = float(data["tui_refresh_rate"])
         if "tui_compact" in data:
             config.tui_compact = bool(data["tui_compact"])
+        # Session logging options
+        if "session_logging" in data:
+            config.session_logging = bool(data["session_logging"])
+        if "sessions_dir" in data:
+            config.sessions_dir = str(data["sessions_dir"])
         return config
 
 

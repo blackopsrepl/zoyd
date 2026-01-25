@@ -97,6 +97,17 @@ def cli():
     default=None,
     help="Disable Rich TUI and use plain text output",
 )
+@click.option(
+    "--session-log/--no-session-log",
+    default=None,
+    help="Enable/disable session logging to .zoyd/sessions/ (default: disabled)",
+)
+@click.option(
+    "--sessions-dir",
+    default=None,
+    type=click.Path(path_type=Path),
+    help="Directory for session logs (default: .zoyd/sessions)",
+)
 @click.pass_context
 def run(
     ctx: click.Context,
@@ -112,6 +123,8 @@ def run(
     fail_fast: bool | None,
     max_cost: float | None,
     no_tui: bool | None,
+    session_log: bool | None,
+    sessions_dir: Path | None,
 ):
     """Run the Zoyd loop against a PRD file.
 
@@ -154,6 +167,12 @@ def run(
     tui_refresh_rate = config.tui_refresh_rate
     tui_compact = config.tui_compact
 
+    # Apply session logging config defaults
+    if session_log is None:
+        session_log = config.session_logging
+    if sessions_dir is None:
+        sessions_dir = Path(config.sessions_dir)
+
     # Handle resume mode validation
     if resume and not progress_path.exists():
         click.echo(f"Error: Cannot resume - progress file '{progress_path}' does not exist", err=True)
@@ -174,6 +193,8 @@ def run(
         tui_enabled=not no_tui,
         tui_refresh_rate=tui_refresh_rate,
         tui_compact=tui_compact,
+        session_logging=session_log,
+        sessions_dir=str(sessions_dir),
     )
 
     exit_code = runner.run()
