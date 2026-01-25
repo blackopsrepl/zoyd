@@ -112,9 +112,9 @@ class TestCreateOperations:
         raw_data = client.get(meta_key)
         assert raw_data is not None
         data = json.loads(raw_data)
-        assert data["session_id"] == "zebedo-create-test"
-        assert data["prd_path"] == "/path/to/prd.md"
-        assert data["model"] == "sonnet"
+        assert data["metadata"]["session_id"] == "zebedo-create-test"
+        assert data["metadata"]["prd_path"] == "/path/to/prd.md"
+        assert data["metadata"]["model"] == "sonnet"
 
         # Verify session is in the index
         index_key = "zebedo:sessions:index"
@@ -141,7 +141,7 @@ class TestCreateOperations:
             raw_data = client.get(meta_key)
             assert raw_data is not None
             data = json.loads(raw_data)
-            assert data["session_id"] == sid
+            assert data["metadata"]["session_id"] == sid
 
         # Verify all in index
         index_key = "zebedo:sessions:index"
@@ -309,14 +309,14 @@ class TestUpdateOperations:
         # Verify ended_at is set
         session_after = zebedo_storage.get_session("zebedo-end-session")
         assert session_after.metadata.ended_at is not None
-        assert isinstance(session_after.metadata.ended_at, datetime)
+        assert isinstance(session_after.metadata.ended_at, str)
 
         # Verify directly in Redis
         client = zebedo_storage._raw_client
         meta_key = "zebedo:session:zebedo-end-session:meta"
         raw_data = client.get(meta_key)
         data = json.loads(raw_data)
-        assert data["ended_at"] is not None
+        assert data["metadata"]["ended_at"] is not None
 
     def test_add_events_incremental(self, zebedo_storage):
         """Add multiple events, verify stored."""
