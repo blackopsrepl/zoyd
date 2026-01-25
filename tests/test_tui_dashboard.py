@@ -77,11 +77,36 @@ class TestDashboardState:
         state = DashboardState()
         state.error_message = "Something went wrong"
         state.error_details = "Stack trace here"
+        state.error_suggestion = "Try again"
+        state.error_type = "warning"
 
         state.reset_error()
 
         assert state.error_message is None
         assert state.error_details is None
+        assert state.error_suggestion is None
+        assert state.error_type == "error"
+
+    def test_has_error_false(self) -> None:
+        """Test has_error returns False when no error."""
+        state = DashboardState()
+        assert state.has_error() is False
+
+    def test_has_error_true(self) -> None:
+        """Test has_error returns True when error is set."""
+        state = DashboardState()
+        state.error_message = "Error"
+        assert state.has_error() is True
+
+    def test_error_type_default(self) -> None:
+        """Test default error type."""
+        state = DashboardState()
+        assert state.error_type == "error"
+
+    def test_error_suggestion_default(self) -> None:
+        """Test default error suggestion."""
+        state = DashboardState()
+        assert state.error_suggestion is None
 
     def test_output_lines_deque_limit(self) -> None:
         """Test that output_lines has a max length."""
@@ -283,6 +308,20 @@ class TestDashboardRendering:
         result = dashboard._render_banner()
         assert isinstance(result, Panel)
 
+    def test_render_banner_blocked(self, dashboard: Dashboard) -> None:
+        """Test banner rendering with blocked state."""
+        dashboard.state.error_message = "Task blocked"
+        dashboard.state.error_type = "blocked"
+        result = dashboard._render_banner()
+        assert isinstance(result, Panel)
+
+    def test_render_banner_warning(self, dashboard: Dashboard) -> None:
+        """Test banner rendering with warning state."""
+        dashboard.state.error_message = "Warning"
+        dashboard.state.error_type = "warning"
+        result = dashboard._render_banner()
+        assert isinstance(result, Panel)
+
     def test_render_status(self, dashboard: Dashboard) -> None:
         """Test status rendering."""
         dashboard.state.prd_path = "test.md"
@@ -328,6 +367,28 @@ class TestDashboardRendering:
         """Test output rendering with error state."""
         dashboard.state.error_message = "Something went wrong"
         dashboard.state.error_details = "Details here"
+        result = dashboard._render_output()
+        assert isinstance(result, Panel)
+
+    def test_render_output_with_error_suggestion(self, dashboard: Dashboard) -> None:
+        """Test output rendering with error and suggestion."""
+        dashboard.state.error_message = "Error"
+        dashboard.state.error_suggestion = "Try this fix"
+        result = dashboard._render_output()
+        assert isinstance(result, Panel)
+
+    def test_render_output_with_blocked(self, dashboard: Dashboard) -> None:
+        """Test output rendering with blocked state."""
+        dashboard.state.error_message = "Task blocked"
+        dashboard.state.error_type = "blocked"
+        dashboard.state.error_details = "Missing dependency"
+        result = dashboard._render_output()
+        assert isinstance(result, Panel)
+
+    def test_render_output_with_warning(self, dashboard: Dashboard) -> None:
+        """Test output rendering with warning state."""
+        dashboard.state.error_message = "Cost limit approaching"
+        dashboard.state.error_type = "warning"
         result = dashboard._render_output()
         assert isinstance(result, Panel)
 
@@ -498,16 +559,69 @@ class TestDashboardStateUpdates:
         assert dashboard.state.error_message == "Error message"
         assert dashboard.state.error_details == "Error details"
 
+    def test_set_error_with_suggestion(self, dashboard: Dashboard) -> None:
+        """Test setting error with suggestion."""
+        result = dashboard.set_error(
+            "Error message",
+            details="Details",
+            suggestion="Try this",
+        )
+
+        assert result is dashboard
+        assert dashboard.state.error_suggestion == "Try this"
+
+    def test_set_error_with_type(self, dashboard: Dashboard) -> None:
+        """Test setting error with custom type."""
+        result = dashboard.set_error(
+            "Error message",
+            error_type="warning",
+        )
+
+        assert result is dashboard
+        assert dashboard.state.error_type == "warning"
+
+    def test_set_blocked(self, dashboard: Dashboard) -> None:
+        """Test setting blocked state."""
+        result = dashboard.set_blocked(
+            "Task blocked",
+            reason="Missing dependency",
+            suggestion="Install the dependency",
+        )
+
+        assert result is dashboard
+        assert dashboard.state.error_message == "Task blocked"
+        assert dashboard.state.error_details == "Missing dependency"
+        assert dashboard.state.error_suggestion == "Install the dependency"
+        assert dashboard.state.error_type == "blocked"
+
+    def test_set_warning(self, dashboard: Dashboard) -> None:
+        """Test setting warning state."""
+        result = dashboard.set_warning(
+            "Warning message",
+            details="Warning details",
+            suggestion="Consider this",
+        )
+
+        assert result is dashboard
+        assert dashboard.state.error_message == "Warning message"
+        assert dashboard.state.error_details == "Warning details"
+        assert dashboard.state.error_suggestion == "Consider this"
+        assert dashboard.state.error_type == "warning"
+
     def test_clear_error(self, dashboard: Dashboard) -> None:
         """Test clearing error."""
         dashboard.state.error_message = "Error"
         dashboard.state.error_details = "Details"
+        dashboard.state.error_suggestion = "Suggestion"
+        dashboard.state.error_type = "warning"
 
         result = dashboard.clear_error()
 
         assert result is dashboard
         assert dashboard.state.error_message is None
         assert dashboard.state.error_details is None
+        assert dashboard.state.error_suggestion is None
+        assert dashboard.state.error_type == "error"
 
     def test_add_iteration_history(self, dashboard: Dashboard) -> None:
         """Test adding iteration to history."""
@@ -689,6 +803,30 @@ class TestDashboardEventHandlers:
 
         assert dashboard.state.error_message is not None
         assert "code 1" in dashboard.state.error_message
+        # Should have suggestion for code 1
+        assert dashboard.state.error_suggestion is not None
+
+    def test_on_claude_error_code_2(self, dashboard: Dashboard) -> None:
+        """Test CLAUDE_ERROR event handler with code 2."""
+        event = Event(
+            EventType.CLAUDE_ERROR,
+            {"return_code": 2, "output": ""},
+        )
+        dashboard._on_claude_error(event)
+
+        assert dashboard.state.error_suggestion is not None
+        assert "PRD" in dashboard.state.error_suggestion
+
+    def test_on_claude_error_other_code(self, dashboard: Dashboard) -> None:
+        """Test CLAUDE_ERROR event handler with other code."""
+        event = Event(
+            EventType.CLAUDE_ERROR,
+            {"return_code": 99, "output": ""},
+        )
+        dashboard._on_claude_error(event)
+
+        # No suggestion for unknown codes
+        assert dashboard.state.error_suggestion is None
 
     def test_on_task_complete(self, dashboard: Dashboard) -> None:
         """Test TASK_COMPLETE event handler."""
@@ -712,6 +850,24 @@ class TestDashboardEventHandlers:
         dashboard._on_task_blocked(event)
 
         assert 42 in dashboard.state.blocked_tasks
+
+    def test_on_task_blocked_with_details(self, dashboard: Dashboard) -> None:
+        """Test TASK_BLOCKED event handler with full details."""
+        event = Event(
+            EventType.TASK_BLOCKED,
+            {
+                "line_number": 42,
+                "task": "Implement feature",
+                "reason": "Missing API key",
+                "suggestion": "Set the API_KEY environment variable",
+            },
+        )
+        dashboard._on_task_blocked(event)
+
+        assert dashboard.state.error_type == "blocked"
+        assert dashboard.state.error_message == "Implement feature"
+        assert dashboard.state.error_details == "Missing API key"
+        assert dashboard.state.error_suggestion == "Set the API_KEY environment variable"
 
     def test_on_cost_update(self, dashboard: Dashboard) -> None:
         """Test COST_UPDATE event handler."""
@@ -746,6 +902,10 @@ class TestDashboardEventHandlers:
 
         assert dashboard.state.error_message is not None
         assert "exceeded" in dashboard.state.error_message.lower()
+        # Should be a warning type with suggestion
+        assert dashboard.state.error_type == "warning"
+        assert dashboard.state.error_suggestion is not None
+        assert "max-cost" in dashboard.state.error_suggestion.lower()
 
     def test_on_commit_success(self, dashboard: Dashboard) -> None:
         """Test COMMIT_SUCCESS event handler."""

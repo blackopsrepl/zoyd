@@ -25,6 +25,7 @@ from zoyd.prd import Task
 from zoyd.tui.banner import MIND_FLAYER_COMPACT, MIND_FLAYER_FULL
 from zoyd.tui.events import Event, EventEmitter, EventType
 from zoyd.tui.panels import (
+    create_blocked_task_panel,
     create_claude_output_panel,
     create_error_panel,
     create_git_commit_log_panel,
@@ -94,6 +95,8 @@ class DashboardState:
         # Error state
         self.error_message: str | None = None
         self.error_details: str | None = None
+        self.error_suggestion: str | None = None
+        self.error_type: str = "error"  # "error", "warning", "blocked"
 
         # Iteration history
         self.iteration_history: list[dict] = []
@@ -107,6 +110,16 @@ class DashboardState:
         """Clear any error state."""
         self.error_message = None
         self.error_details = None
+        self.error_suggestion = None
+        self.error_type = "error"
+
+    def has_error(self) -> bool:
+        """Check if there is an error state.
+
+        Returns:
+            True if there is an error message set.
+        """
+        return self.error_message is not None
 
     def add_iteration_to_history(
         self,
@@ -275,6 +288,9 @@ class Dashboard:
     def _render_banner(self) -> RenderableType:
         """Render the banner section.
 
+        When in error state, the banner displays prominently with red styling
+        to provide clear visual feedback about the error condition.
+
         Returns:
             Rich renderable for the banner.
         """
@@ -284,19 +300,32 @@ class Dashboard:
         # Just the title portion for the fixed header
         text = Text()
         text.append("ZOYD", style=f"bold {COLORS['psionic']}")
-        if self.state.is_running:
+
+        # Determine border style based on state
+        border_style = COLORS["twilight"]
+
+        if self.state.has_error():
+            text.append(" - ", style="dim")
+            # Different error types have different visual feedback
+            if self.state.error_type == "blocked":
+                text.append("BLOCKED", style=f"bold {COLORS['blocked']}")
+                border_style = COLORS["blocked"]
+            elif self.state.error_type == "warning":
+                text.append("WARNING", style=f"bold {COLORS['warning']}")
+                border_style = COLORS["warning"]
+            else:
+                text.append("ERROR", style=f"bold {COLORS['error']}")
+                border_style = COLORS["error"]
+        elif self.state.is_running:
             text.append(" - ", style="dim")
             text.append("RUNNING", style=f"bold {COLORS['success']}")
-        elif self.state.error_message:
-            text.append(" - ", style="dim")
-            text.append("ERROR", style=f"bold {COLORS['error']}")
         else:
             text.append(" - ", style="dim")
             text.append("AUTONOMOUS LOOP", style=COLORS["orchid"])
 
         return Panel(
             text,
-            border_style=COLORS["twilight"],
+            border_style=border_style,
             padding=(0, 1),
         )
 
@@ -349,15 +378,31 @@ class Dashboard:
     def _render_output(self) -> RenderableType:
         """Render the output section.
 
+        When in error state, displays an error panel with proper visual feedback
+        including the error type (error, warning, blocked), message, details,
+        and optional suggestions for recovery.
+
         Returns:
             Rich renderable for Claude output and logs.
         """
         # Show error panel if there's an error
-        if self.state.error_message:
-            return create_error_panel(
-                self.state.error_message,
-                details=self.state.error_details,
-            ).render()
+        if self.state.has_error():
+            if self.state.error_type == "blocked":
+                # Use blocked task panel for blocked errors
+                panel = create_blocked_task_panel(
+                    self.state.error_message or "Task blocked",
+                    reason=self.state.error_details,
+                    suggestions=[self.state.error_suggestion] if self.state.error_suggestion else None,
+                )
+                return panel.render()
+            else:
+                # Use error panel for errors and warnings
+                panel = create_error_panel(
+                    self.state.error_message,
+                    details=self.state.error_details,
+                    suggestion=self.state.error_suggestion,
+                )
+                return panel.render()
 
         # Show Claude output with Markdown rendering
         if self.state.current_output:
@@ -622,20 +667,89 @@ class Dashboard:
         self.refresh()
         return self
 
-    def set_error(self, message: str, details: str | None = None) -> Dashboard:
-        """Set an error state.
+    def set_error(
+        self,
+        message: str,
+        details: str | None = None,
+        *,
+        suggestion: str | None = None,
+        error_type: str = "error",
+    ) -> Dashboard:
+        """Set an error state with visual feedback.
+
+        The error state is displayed prominently in the dashboard with:
+        - Red border on the banner panel
+        - Error panel in the output section
+        - Status message indicating error state
 
         Args:
             message: Error message.
             details: Optional error details.
+            suggestion: Optional suggestion for how to resolve the error.
+            error_type: Type of error - "error", "warning", or "blocked".
 
         Returns:
             Self for method chaining.
         """
         self.state.error_message = message
         self.state.error_details = details
+        self.state.error_suggestion = suggestion
+        self.state.error_type = error_type
         self.refresh()
         return self
+
+    def set_blocked(
+        self,
+        message: str,
+        *,
+        reason: str | None = None,
+        suggestion: str | None = None,
+    ) -> Dashboard:
+        """Set a blocked state with visual feedback.
+
+        Similar to set_error but uses blocked task styling (brown border)
+        and the BlockedTaskPanel for display.
+
+        Args:
+            message: The blocked task description.
+            reason: Why the task is blocked.
+            suggestion: Suggestion for how to unblock.
+
+        Returns:
+            Self for method chaining.
+        """
+        return self.set_error(
+            message,
+            details=reason,
+            suggestion=suggestion,
+            error_type="blocked",
+        )
+
+    def set_warning(
+        self,
+        message: str,
+        details: str | None = None,
+        *,
+        suggestion: str | None = None,
+    ) -> Dashboard:
+        """Set a warning state with visual feedback.
+
+        Similar to set_error but uses warning styling (yellow border).
+
+        Args:
+            message: Warning message.
+            details: Optional warning details.
+            suggestion: Optional suggestion.
+
+        Returns:
+            Self for method chaining.
+        """
+        return self.set_error(
+            message,
+            details=details,
+            suggestion=suggestion,
+            error_type="warning",
+        )
 
     def clear_error(self) -> Dashboard:
         """Clear any error state.
@@ -821,12 +935,26 @@ class Dashboard:
         self.refresh()
 
     def _on_claude_error(self, event: Event) -> None:
-        """Handle CLAUDE_ERROR event."""
+        """Handle CLAUDE_ERROR event.
+
+        Displays Claude invocation errors with proper visual feedback.
+        The error panel shows the return code, truncated output, and
+        suggestions for common issues.
+        """
         return_code = event.get("return_code", 1)
         output = event.get("output", "")[:500]
+
+        # Provide helpful suggestions based on common error codes
+        suggestion = None
+        if return_code == 1:
+            suggestion = "Check Claude API key and network connectivity"
+        elif return_code == 2:
+            suggestion = "Check if the PRD file exists and is readable"
+
         self.set_error(
             f"Claude invocation failed (code {return_code})",
             details=output if output else None,
+            suggestion=suggestion,
         )
 
     def _on_task_complete(self, event: Event) -> None:
@@ -839,10 +967,25 @@ class Dashboard:
         self.refresh()
 
     def _on_task_blocked(self, event: Event) -> None:
-        """Handle TASK_BLOCKED event."""
+        """Handle TASK_BLOCKED event.
+
+        Displays a blocked task with appropriate visual feedback using
+        the BlockedTaskPanel with brown styling.
+        """
         line_number = event.get("line_number")
+        task = event.get("task", "")
+        reason = event.get("reason")
+        suggestion = event.get("suggestion")
+
         if line_number is not None:
             self.state.blocked_tasks.add(line_number)
+
+        # Set blocked state with visual feedback
+        self.set_blocked(
+            task if task else "Task blocked",
+            reason=reason,
+            suggestion=suggestion,
+        )
         self.state.status_message = "Task blocked"
         self.refresh()
 
@@ -860,11 +1003,17 @@ class Dashboard:
         self.refresh()
 
     def _on_cost_limit_exceeded(self, event: Event) -> None:
-        """Handle COST_LIMIT_EXCEEDED event."""
+        """Handle COST_LIMIT_EXCEEDED event.
+
+        Displays cost limit exceeded error with proper visual feedback
+        and suggestions for how to proceed.
+        """
         total_cost = event.get("total_cost", 0)
         max_cost = event.get("max_cost", 0)
         self.set_error(
             f"Cost limit exceeded: ${total_cost:.4f} / ${max_cost:.2f}",
+            suggestion="Increase --max-cost limit or use a cheaper model",
+            error_type="warning",
         )
 
     def _on_commit_success(self, event: Event) -> None:
