@@ -30,9 +30,11 @@ from zoyd.tui.panels import (
     create_error_panel,
 )
 
+# Re-export status rendering
+from zoyd.tui.status import render_status, print_status, get_status_summary
+
 # Future modules - imported when they exist
 # These will be uncommented as each module is implemented:
-# from zoyd.tui.status import render_status
 # from zoyd.tui.progress import ProgressPanel, CostGauge
 # from zoyd.tui.events import EventType, EventEmitter
 # from zoyd.tui.dashboard import Dashboard
@@ -57,8 +59,11 @@ __all__ = [
     "create_status_bar",
     "create_output_panel",
     "create_error_panel",
+    # Status rendering
+    "render_status",
+    "print_status",
+    "get_status_summary",
     # Future exports (uncomment when modules are implemented):
-    # "render_status",
     # "ProgressPanel",
     # "CostGauge",
     # "EventType",
