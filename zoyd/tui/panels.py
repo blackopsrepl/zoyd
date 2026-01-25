@@ -185,7 +185,12 @@ class ClaudeOutputPanel:
 
     Renders Claude's markdown output with proper styling for headers,
     code blocks, lists, and other markdown elements.
+
+    Code blocks are syntax highlighted using the dracula theme by default.
     """
+
+    # Default code theme for syntax highlighting
+    DEFAULT_CODE_THEME = "dracula"
 
     def __init__(
         self,
@@ -193,6 +198,7 @@ class ClaudeOutputPanel:
         *,
         subtitle: str | None = None,
         max_height: int | None = None,
+        code_theme: str = "dracula",
     ) -> None:
         """Initialize the Claude output panel.
 
@@ -200,12 +206,14 @@ class ClaudeOutputPanel:
             title: Title for the panel.
             subtitle: Optional subtitle shown in the panel border.
             max_height: Maximum height in lines (not yet enforced).
+            code_theme: Pygments theme for syntax highlighting (default: dracula).
         """
         self.title = title
         self.subtitle = subtitle
         self.max_height = max_height
         self._content: str = ""
         self._use_markdown: bool = True
+        self._code_theme: str = code_theme
 
     def set_content(self, content: str) -> ClaudeOutputPanel:
         """Set the content to display in the panel.
@@ -231,6 +239,18 @@ class ClaudeOutputPanel:
         self._use_markdown = use_markdown
         return self
 
+    def set_code_theme(self, theme: str) -> ClaudeOutputPanel:
+        """Set the syntax highlighting theme for code blocks.
+
+        Args:
+            theme: Pygments theme name (e.g., 'dracula', 'monokai', 'github-dark').
+
+        Returns:
+            Self for method chaining.
+        """
+        self._code_theme = theme
+        return self
+
     def clear(self) -> ClaudeOutputPanel:
         """Clear the panel content.
 
@@ -243,12 +263,18 @@ class ClaudeOutputPanel:
     def render(self) -> Panel:
         """Render the Claude output panel with Markdown.
 
+        Code blocks are syntax highlighted using the configured code theme
+        (dracula by default).
+
         Returns:
             A Rich Panel containing the rendered markdown content.
         """
         if self._content:
             if self._use_markdown:
-                content: RenderableType = Markdown(self._content)
+                content: RenderableType = Markdown(
+                    self._content,
+                    code_theme=self._code_theme,
+                )
             else:
                 content = Text(self._content)
         else:
@@ -603,6 +629,7 @@ def create_claude_output_panel(
     title: str = "Claude Output",
     subtitle: str | None = None,
     use_markdown: bool = True,
+    code_theme: str = "dracula",
 ) -> ClaudeOutputPanel:
     """Create a Claude output panel with markdown content.
 
@@ -611,11 +638,12 @@ def create_claude_output_panel(
         title: Title for the panel.
         subtitle: Optional subtitle (e.g., iteration number).
         use_markdown: Whether to render content as markdown.
+        code_theme: Pygments theme for syntax highlighting (default: dracula).
 
     Returns:
         A configured ClaudeOutputPanel instance.
     """
-    panel = ClaudeOutputPanel(title=title, subtitle=subtitle)
+    panel = ClaudeOutputPanel(title=title, subtitle=subtitle, code_theme=code_theme)
     panel.set_content(content)
     panel.set_markdown(use_markdown)
     return panel

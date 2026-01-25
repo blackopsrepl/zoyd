@@ -868,6 +868,91 @@ class TestClaudeOutputPanel:
         assert panel._content == "Content"
         assert panel._use_markdown is True
 
+    def test_default_code_theme_is_dracula(self):
+        from zoyd.tui.panels import ClaudeOutputPanel
+
+        panel = ClaudeOutputPanel()
+        assert panel._code_theme == "dracula"
+        assert ClaudeOutputPanel.DEFAULT_CODE_THEME == "dracula"
+
+    def test_custom_code_theme_in_constructor(self):
+        from zoyd.tui.panels import ClaudeOutputPanel
+
+        panel = ClaudeOutputPanel(code_theme="monokai")
+        assert panel._code_theme == "monokai"
+
+    def test_set_code_theme(self):
+        from zoyd.tui.panels import ClaudeOutputPanel
+
+        panel = ClaudeOutputPanel()
+        result = panel.set_code_theme("github-dark")
+        assert result is panel  # Returns self for chaining
+        assert panel._code_theme == "github-dark"
+
+    def test_code_theme_method_chaining(self):
+        from zoyd.tui.panels import ClaudeOutputPanel
+
+        panel = ClaudeOutputPanel()
+        panel.set_content("```python\nprint('test')\n```").set_code_theme("monokai")
+        assert panel._code_theme == "monokai"
+        assert panel._content == "```python\nprint('test')\n```"
+
+    def test_render_code_blocks_with_syntax_highlighting(self):
+        import re
+
+        from zoyd.tui.panels import ClaudeOutputPanel
+
+        content = "```python\ndef greet(name):\n    return f'Hello, {name}!'\n```"
+        panel = ClaudeOutputPanel()
+        panel.set_content(content)
+
+        output = StringIO()
+        # Use force_terminal to enable color/syntax highlighting
+        console = Console(file=output, force_terminal=True, width=80)
+        console.print(panel.render())
+        rendered = output.getvalue()
+
+        # With syntax highlighting, there should be ANSI escape codes
+        assert "\x1b[" in rendered  # ANSI escape sequence
+
+        # Strip ANSI codes to check content
+        ansi_escape = re.compile(r"\x1b\[[0-9;]*m")
+        plain = ansi_escape.sub("", rendered)
+
+        # Code should be present in plain text
+        assert "def greet" in plain
+        assert "name" in plain
+
+    def test_render_multiple_languages(self):
+        import re
+
+        from zoyd.tui.panels import ClaudeOutputPanel
+
+        content = """
+```python
+def hello():
+    pass
+```
+
+```javascript
+function hello() {}
+```
+"""
+        panel = ClaudeOutputPanel()
+        panel.set_content(content)
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        console.print(panel.render())
+        rendered = output.getvalue()
+
+        # Strip ANSI codes to check content
+        ansi_escape = re.compile(r"\x1b\[[0-9;]*m")
+        plain = ansi_escape.sub("", rendered)
+
+        assert "def hello" in plain
+        assert "function hello" in plain
+
 
 class TestCreateClaudeOutputPanel:
     def test_creates_panel(self):
@@ -906,6 +991,18 @@ class TestCreateClaudeOutputPanel:
 
         panel = create_claude_output_panel()
         assert panel._content == ""
+
+    def test_default_code_theme_is_dracula(self):
+        from zoyd.tui.panels import create_claude_output_panel
+
+        panel = create_claude_output_panel("# Test")
+        assert panel._code_theme == "dracula"
+
+    def test_custom_code_theme(self):
+        from zoyd.tui.panels import create_claude_output_panel
+
+        panel = create_claude_output_panel("# Test", code_theme="monokai")
+        assert panel._code_theme == "monokai"
 
 
 class TestCreateWarningPanel:
