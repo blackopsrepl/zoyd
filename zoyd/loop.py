@@ -13,7 +13,7 @@ from pathlib import Path
 from . import prd, progress
 from .tui.console import create_console
 from .tui.events import EventEmitter, EventType
-from .tui.live import LiveDisplay, create_live_display
+from .tui.live import LiveDisplay, PlainDisplay, create_live_display, create_plain_display
 
 # Patterns that indicate Claude cannot complete a task
 CANNOT_COMPLETE_PATTERNS = [
@@ -300,6 +300,7 @@ class LoopRunner:
         resume: bool = False,
         fail_fast: bool = False,
         max_cost: float | None = None,
+        tui_enabled: bool = True,
     ):
         self.prd_path = prd_path.resolve()
         self.progress_path = progress_path.resolve()
@@ -312,15 +313,25 @@ class LoopRunner:
         self.resume = resume
         self.fail_fast = fail_fast
         self.max_cost = max_cost
-        # Create live display for TUI output
-        self.live = create_live_display(
-            create_console(),
-            prd_path=str(self.prd_path),
-            progress_path=str(self.progress_path),
-            max_iterations=self.max_iterations,
-            model=self.model,
-            max_cost=self.max_cost,
-        )
+        self.tui_enabled = tui_enabled
+        # Create display for output (TUI or plain depending on setting)
+        if tui_enabled:
+            self.live: LiveDisplay | PlainDisplay = create_live_display(
+                create_console(),
+                prd_path=str(self.prd_path),
+                progress_path=str(self.progress_path),
+                max_iterations=self.max_iterations,
+                model=self.model,
+                max_cost=self.max_cost,
+            )
+        else:
+            self.live = create_plain_display(
+                prd_path=str(self.prd_path),
+                progress_path=str(self.progress_path),
+                max_iterations=self.max_iterations,
+                model=self.model,
+                max_cost=self.max_cost,
+            )
         self.consecutive_failures = 0
         self.max_consecutive_failures = 3
         self.base_backoff = 2.0  # Base for exponential backoff

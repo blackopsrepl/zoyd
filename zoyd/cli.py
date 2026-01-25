@@ -91,6 +91,12 @@ def cli():
     type=float,
     help="Maximum cost in USD before stopping (estimates token usage)",
 )
+@click.option(
+    "--no-tui",
+    is_flag=True,
+    default=False,
+    help="Disable Rich TUI and use plain text output",
+)
 @click.pass_context
 def run(
     ctx: click.Context,
@@ -105,6 +111,7 @@ def run(
     resume: bool,
     fail_fast: bool | None,
     max_cost: float | None,
+    no_tui: bool,
 ):
     """Run the Zoyd loop against a PRD file.
 
@@ -156,6 +163,7 @@ def run(
         resume=resume,
         fail_fast=fail_fast,
         max_cost=max_cost,
+        tui_enabled=not no_tui,
     )
 
     exit_code = runner.run()

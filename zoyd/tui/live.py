@@ -264,6 +264,154 @@ class LiveDisplay:
             self._live = None
 
 
+class PlainDisplay:
+    """A plain text display for non-TUI output.
+
+    Provides the same interface as LiveDisplay but outputs plain text
+    to stdout without any Rich formatting or live updates.
+    """
+
+    def __init__(
+        self,
+        *,
+        prd_path: str = "",
+        progress_path: str = "",
+        max_iterations: int = 10,
+        model: str | None = None,
+        max_cost: float | None = None,
+        **kwargs,  # Ignore extra args like max_log_lines
+    ) -> None:
+        """Initialize the plain display.
+
+        Args:
+            prd_path: Path to the PRD file.
+            progress_path: Path to the progress file.
+            max_iterations: Maximum iterations allowed.
+            model: Claude model being used.
+            max_cost: Maximum cost limit in USD.
+        """
+        self.prd_path = prd_path
+        self.progress_path = progress_path
+        self.max_iterations = max_iterations
+        self.model = model
+        self.max_cost = max_cost
+
+        # State (same as LiveDisplay for API compatibility)
+        self._iteration = 0
+        self._cost = 0.0
+        self._task_text: str | None = None
+
+    @property
+    def iteration(self) -> int:
+        """Get the current iteration number."""
+        return self._iteration
+
+    @iteration.setter
+    def iteration(self, value: int) -> None:
+        """Set the current iteration number."""
+        self._iteration = value
+
+    @property
+    def cost(self) -> float:
+        """Get the current cost."""
+        return self._cost
+
+    @cost.setter
+    def cost(self, value: float) -> None:
+        """Set the current cost."""
+        self._cost = value
+
+    def set_task(self, text: str | None) -> None:
+        """Set the current task being worked on.
+
+        Args:
+            text: Task text, or None to clear.
+        """
+        self._task_text = text
+
+    def start_spinner(self, text: str = "Invoking Claude...") -> None:
+        """Start the loading spinner (no-op in plain mode).
+
+        Args:
+            text: Text to show (ignored in plain mode).
+        """
+        # Plain mode doesn't show spinners
+        pass
+
+    def stop_spinner(self) -> None:
+        """Stop the loading spinner (no-op in plain mode)."""
+        pass
+
+    def log(self, message: str, style: str | None = None) -> None:
+        """Print a log message to stdout.
+
+        Args:
+            message: The message to log.
+            style: Optional style (ignored in plain mode).
+        """
+        # Strip Rich markup tags for plain output
+        import re
+        plain_message = re.sub(r'\[/?[^\]]+\]', '', message)
+        print(plain_message)
+
+    def log_iteration_start(self, iteration: int, completed: int, total: int) -> None:
+        """Log the start of an iteration.
+
+        Args:
+            iteration: Iteration number.
+            completed: Number of completed tasks.
+            total: Total number of tasks.
+        """
+        self._iteration = iteration
+        print(f"=== Iteration {iteration}/{self.max_iterations} ({completed}/{total} tasks) ===")
+
+    def log_success(self, message: str) -> None:
+        """Log a success message.
+
+        Args:
+            message: The success message.
+        """
+        print(f"[SUCCESS] {message}")
+
+    def log_error(self, message: str) -> None:
+        """Log an error message.
+
+        Args:
+            message: The error message.
+        """
+        print(f"[ERROR] {message}")
+
+    def log_warning(self, message: str) -> None:
+        """Log a warning message.
+
+        Args:
+            message: The warning message.
+        """
+        print(f"[WARNING] {message}")
+
+    def __enter__(self) -> "PlainDisplay":
+        """Enter the display context.
+
+        Returns:
+            Self for use in with statement.
+        """
+        # Print startup banner in plain mode
+        print(f"Zoyd - Autonomous Loop")
+        print(f"PRD: {self.prd_path}")
+        print(f"Progress: {self.progress_path}")
+        print(f"Max iterations: {self.max_iterations}")
+        if self.model:
+            print(f"Model: {self.model}")
+        if self.max_cost:
+            print(f"Cost limit: ${self.max_cost:.2f}")
+        print()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Exit the display context."""
+        pass
+
+
 def create_live_display(
     console: Console,
     *,
@@ -298,4 +446,35 @@ def create_live_display(
         model=model,
         max_cost=max_cost,
         max_log_lines=max_log_lines,
+    )
+
+
+def create_plain_display(
+    *,
+    prd_path: str = "",
+    progress_path: str = "",
+    max_iterations: int = 10,
+    model: str | None = None,
+    max_cost: float | None = None,
+) -> PlainDisplay:
+    """Create a plain display instance.
+
+    Factory function for creating PlainDisplay for non-TUI mode.
+
+    Args:
+        prd_path: Path to the PRD file.
+        progress_path: Path to the progress file.
+        max_iterations: Maximum iterations allowed.
+        model: Claude model being used.
+        max_cost: Maximum cost limit in USD.
+
+    Returns:
+        A configured PlainDisplay instance.
+    """
+    return PlainDisplay(
+        prd_path=prd_path,
+        progress_path=progress_path,
+        max_iterations=max_iterations,
+        model=model,
+        max_cost=max_cost,
     )

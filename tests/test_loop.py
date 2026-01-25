@@ -1943,3 +1943,287 @@ class TestLoopRunnerEvents:
         # Verify iteration numbers
         assert [e.data.get("iteration") for e in start_events] == [1, 2, 3]
         assert [e.data.get("iteration") for e in end_events] == [1, 2, 3]
+
+
+class TestNoTui:
+    """Tests for TUI disabled mode."""
+
+    def test_tui_enabled_default_true(self, tmp_path):
+        """Test that TUI is enabled by default."""
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+        )
+        assert runner.tui_enabled is True
+
+    def test_tui_can_be_disabled(self, tmp_path):
+        """Test that TUI can be disabled."""
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            tui_enabled=False,
+        )
+        assert runner.tui_enabled is False
+
+    def test_live_display_used_when_tui_enabled(self, tmp_path):
+        """Test that LiveDisplay is used when TUI is enabled."""
+        from zoyd.tui.live import LiveDisplay
+
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            tui_enabled=True,
+        )
+        assert isinstance(runner.live, LiveDisplay)
+
+    def test_plain_display_used_when_tui_disabled(self, tmp_path):
+        """Test that PlainDisplay is used when TUI is disabled."""
+        from zoyd.tui.live import PlainDisplay
+
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            tui_enabled=False,
+        )
+        assert isinstance(runner.live, PlainDisplay)
+
+
+class TestNoTuiCLI:
+    """Tests for --no-tui CLI option."""
+
+    def test_no_tui_flag_in_help(self):
+        """Test that --no-tui flag appears in CLI help."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["run", "--help"])
+        assert result.exit_code == 0
+        assert "--no-tui" in result.output
+        assert "Disable Rich TUI" in result.output or "plain text output" in result.output
+
+    def test_no_tui_shows_plain_output(self, tmp_path):
+        """Test that --no-tui shows plain text output."""
+        runner = CliRunner()
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [x] Task 1")
+
+        result = runner.invoke(cli, [
+            "run",
+            "--prd", str(prd_file),
+            "--no-tui",
+            "--dry-run",
+        ])
+        # Plain output shows "Zoyd - Autonomous Loop" instead of ASCII art
+        assert "Zoyd - Autonomous Loop" in result.output
+        assert "PRD:" in result.output
+
+    def test_no_tui_shows_plain_iteration(self, tmp_path):
+        """Test that --no-tui shows plain iteration messages."""
+        runner = CliRunner()
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [x] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        result = runner.invoke(cli, [
+            "run",
+            "--prd", str(prd_file),
+            "--progress", str(progress_file),
+            "--no-tui",
+            "-n", "1",
+        ])
+        # Should show iteration header in plain format or "All tasks complete" for completed PRD
+        assert "=== Iteration" in result.output or "[SUCCESS] All tasks complete" in result.output
+
+    def test_no_tui_with_dry_run(self, tmp_path):
+        """Test that --no-tui works with --dry-run."""
+        runner = CliRunner()
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+
+        result = runner.invoke(cli, [
+            "run",
+            "--prd", str(prd_file),
+            "--progress", str(progress_file),
+            "--no-tui",
+            "--dry-run",
+            "-n", "1",
+        ])
+        # Exit code 1 means max iterations reached (which is expected for dry run)
+        assert result.exit_code in [0, 1]
+        assert "DRY RUN" in result.output or "Would send prompt" in result.output
+
+
+class TestPlainDisplay:
+    """Tests for PlainDisplay class."""
+
+    def test_plain_display_log_method(self, capsys):
+        """Test that PlainDisplay.log prints to stdout."""
+        from zoyd.tui.live import PlainDisplay
+
+        display = PlainDisplay(prd_path="test.md", max_iterations=10)
+        display.log("Test message")
+
+        captured = capsys.readouterr()
+        assert "Test message" in captured.out
+
+    def test_plain_display_log_strips_markup(self, capsys):
+        """Test that PlainDisplay.log strips Rich markup tags."""
+        from zoyd.tui.live import PlainDisplay
+
+        display = PlainDisplay(prd_path="test.md", max_iterations=10)
+        display.log("[bold]Bold text[/bold]")
+
+        captured = capsys.readouterr()
+        assert "Bold text" in captured.out
+        assert "[bold]" not in captured.out
+
+    def test_plain_display_log_success(self, capsys):
+        """Test that PlainDisplay.log_success prints with [SUCCESS] prefix."""
+        from zoyd.tui.live import PlainDisplay
+
+        display = PlainDisplay(prd_path="test.md", max_iterations=10)
+        display.log_success("Task completed")
+
+        captured = capsys.readouterr()
+        assert "[SUCCESS]" in captured.out
+        assert "Task completed" in captured.out
+
+    def test_plain_display_log_error(self, capsys):
+        """Test that PlainDisplay.log_error prints with [ERROR] prefix."""
+        from zoyd.tui.live import PlainDisplay
+
+        display = PlainDisplay(prd_path="test.md", max_iterations=10)
+        display.log_error("Something failed")
+
+        captured = capsys.readouterr()
+        assert "[ERROR]" in captured.out
+        assert "Something failed" in captured.out
+
+    def test_plain_display_log_warning(self, capsys):
+        """Test that PlainDisplay.log_warning prints with [WARNING] prefix."""
+        from zoyd.tui.live import PlainDisplay
+
+        display = PlainDisplay(prd_path="test.md", max_iterations=10)
+        display.log_warning("Be careful")
+
+        captured = capsys.readouterr()
+        assert "[WARNING]" in captured.out
+        assert "Be careful" in captured.out
+
+    def test_plain_display_iteration_property(self):
+        """Test that PlainDisplay.iteration property works."""
+        from zoyd.tui.live import PlainDisplay
+
+        display = PlainDisplay(prd_path="test.md", max_iterations=10)
+        assert display.iteration == 0
+        display.iteration = 5
+        assert display.iteration == 5
+
+    def test_plain_display_cost_property(self):
+        """Test that PlainDisplay.cost property works."""
+        from zoyd.tui.live import PlainDisplay
+
+        display = PlainDisplay(prd_path="test.md", max_iterations=10)
+        assert display.cost == 0.0
+        display.cost = 1.25
+        assert display.cost == 1.25
+
+    def test_plain_display_set_task(self):
+        """Test that PlainDisplay.set_task works."""
+        from zoyd.tui.live import PlainDisplay
+
+        display = PlainDisplay(prd_path="test.md", max_iterations=10)
+        display.set_task("Task 1")
+        assert display._task_text == "Task 1"
+        display.set_task(None)
+        assert display._task_text is None
+
+    def test_plain_display_context_manager(self, capsys):
+        """Test that PlainDisplay context manager prints startup banner."""
+        from zoyd.tui.live import PlainDisplay
+
+        display = PlainDisplay(
+            prd_path="test.md",
+            progress_path="progress.txt",
+            max_iterations=10,
+            model="opus",
+            max_cost=5.0,
+        )
+
+        with display:
+            pass
+
+        captured = capsys.readouterr()
+        assert "Zoyd - Autonomous Loop" in captured.out
+        assert "PRD: test.md" in captured.out
+        assert "Progress: progress.txt" in captured.out
+        assert "Max iterations: 10" in captured.out
+        assert "Model: opus" in captured.out
+        assert "Cost limit: $5.00" in captured.out
+
+    def test_plain_display_spinner_noop(self):
+        """Test that spinner methods are no-ops in PlainDisplay."""
+        from zoyd.tui.live import PlainDisplay
+
+        display = PlainDisplay(prd_path="test.md", max_iterations=10)
+        # These should not raise any errors
+        display.start_spinner("Loading...")
+        display.stop_spinner()
+
+    def test_plain_display_log_iteration_start(self, capsys):
+        """Test that PlainDisplay.log_iteration_start formats correctly."""
+        from zoyd.tui.live import PlainDisplay
+
+        display = PlainDisplay(prd_path="test.md", max_iterations=10)
+        display.log_iteration_start(3, 5, 10)
+
+        captured = capsys.readouterr()
+        assert "=== Iteration 3/10 (5/10 tasks) ===" in captured.out
+        assert display.iteration == 3
+
+
+class TestCreatePlainDisplay:
+    """Tests for create_plain_display factory function."""
+
+    def test_create_plain_display_defaults(self):
+        """Test create_plain_display with default values."""
+        from zoyd.tui.live import create_plain_display
+
+        display = create_plain_display()
+        assert display.prd_path == ""
+        assert display.progress_path == ""
+        assert display.max_iterations == 10
+        assert display.model is None
+        assert display.max_cost is None
+
+    def test_create_plain_display_with_options(self):
+        """Test create_plain_display with custom options."""
+        from zoyd.tui.live import create_plain_display
+
+        display = create_plain_display(
+            prd_path="my_prd.md",
+            progress_path="my_progress.txt",
+            max_iterations=20,
+            model="sonnet",
+            max_cost=10.0,
+        )
+        assert display.prd_path == "my_prd.md"
+        assert display.progress_path == "my_progress.txt"
+        assert display.max_iterations == 20
+        assert display.model == "sonnet"
+        assert display.max_cost == 10.0
