@@ -27,6 +27,7 @@ from zoyd.tui.events import Event, EventEmitter, EventType
 from zoyd.tui.panels import (
     create_claude_output_panel,
     create_error_panel,
+    create_git_commit_log_panel,
     create_iteration_history_panel,
     create_status_bar,
 )
@@ -45,6 +46,7 @@ LAYOUT_TASKS = "tasks"
 LAYOUT_OUTPUT = "output"
 LAYOUT_PROGRESS = "progress"
 LAYOUT_HISTORY = "history"
+LAYOUT_COMMITS = "commits"
 LAYOUT_MAIN = "main"
 LAYOUT_SIDEBAR = "sidebar"
 LAYOUT_BODY = "body"
@@ -96,6 +98,10 @@ class DashboardState:
         # Iteration history
         self.iteration_history: list[dict] = []
         self.max_history_items: int = 10
+
+        # Git commit log
+        self.commit_log: list[dict] = []
+        self.max_commit_items: int = 10
 
     def reset_error(self) -> None:
         """Clear any error state."""
@@ -162,6 +168,31 @@ class DashboardState:
                 if task is not None:
                     item["task"] = task
                 break
+
+    def add_commit_to_log(
+        self,
+        *,
+        iteration: int,
+        message: str,
+        commit_hash: str | None = None,
+    ) -> None:
+        """Add a commit to the log.
+
+        Args:
+            iteration: Iteration number when commit was made.
+            message: Commit message (first line).
+            commit_hash: Short commit hash (optional).
+        """
+        commit = {
+            "iteration": iteration,
+            "message": message,
+            "hash": commit_hash,
+        }
+        self.commit_log.append(commit)
+
+        # Trim to max items
+        if len(self.commit_log) > self.max_commit_items:
+            self.commit_log = self.commit_log[-self.max_commit_items :]
 
 
 class Dashboard:
@@ -232,10 +263,11 @@ class Dashboard:
             Layout(name=LAYOUT_HISTORY, size=12),
         )
 
-        # Sidebar: tasks at top, progress below
+        # Sidebar: tasks at top, progress and commits below
         layout[LAYOUT_SIDEBAR].split_column(
             Layout(name=LAYOUT_TASKS, ratio=2),
-            Layout(name=LAYOUT_PROGRESS, ratio=1),
+            Layout(name=LAYOUT_PROGRESS, size=8),
+            Layout(name=LAYOUT_COMMITS, ratio=1),
         )
 
         return layout
@@ -398,6 +430,27 @@ class Dashboard:
 
         return history_panel.render()
 
+    def _render_commits(self) -> RenderableType:
+        """Render the git commit log section.
+
+        Returns:
+            Rich renderable for git commit log.
+        """
+        commit_panel = create_git_commit_log_panel(
+            title="Git Commits",
+            max_items=self.state.max_commit_items,
+        )
+
+        # Populate with commit items
+        for commit in self.state.commit_log:
+            commit_panel.add_commit(
+                iteration=commit["iteration"],
+                message=commit.get("message", ""),
+                commit_hash=commit.get("hash"),
+            )
+
+        return commit_panel.render()
+
     def _render(self) -> Layout:
         """Render the complete dashboard.
 
@@ -410,6 +463,7 @@ class Dashboard:
         self._layout[LAYOUT_OUTPUT].update(self._render_output())
         self._layout[LAYOUT_PROGRESS].update(self._render_progress())
         self._layout[LAYOUT_HISTORY].update(self._render_history())
+        self._layout[LAYOUT_COMMITS].update(self._render_commits())
 
         return self._layout
 
@@ -647,6 +701,31 @@ class Dashboard:
         self.refresh()
         return self
 
+    def add_commit(
+        self,
+        iteration: int,
+        message: str,
+        *,
+        commit_hash: str | None = None,
+    ) -> Dashboard:
+        """Add a commit to the git commit log.
+
+        Args:
+            iteration: Iteration number when commit was made.
+            message: Commit message (first line).
+            commit_hash: Short commit hash (optional).
+
+        Returns:
+            Self for method chaining.
+        """
+        self.state.add_commit_to_log(
+            iteration=iteration,
+            message=message,
+            commit_hash=commit_hash,
+        )
+        self.refresh()
+        return self
+
     # --- Event handler integration ---
 
     def connect_events(self, emitter: EventEmitter) -> Dashboard:
@@ -672,6 +751,7 @@ class Dashboard:
         emitter.on(EventType.TASK_BLOCKED, self._on_task_blocked)
         emitter.on(EventType.COST_UPDATE, self._on_cost_update)
         emitter.on(EventType.COST_LIMIT_EXCEEDED, self._on_cost_limit_exceeded)
+        emitter.on(EventType.COMMIT_SUCCESS, self._on_commit_success)
         emitter.on(EventType.LOG_MESSAGE, self._on_log_message)
         return self
 
@@ -786,6 +866,18 @@ class Dashboard:
         self.set_error(
             f"Cost limit exceeded: ${total_cost:.4f} / ${max_cost:.2f}",
         )
+
+    def _on_commit_success(self, event: Event) -> None:
+        """Handle COMMIT_SUCCESS event."""
+        iteration = event.get("iteration", 0)
+        message = event.get("message", "")
+        commit_hash = event.get("hash")
+        self.state.add_commit_to_log(
+            iteration=iteration,
+            message=message,
+            commit_hash=commit_hash,
+        )
+        self.refresh()
 
     def _on_log_message(self, event: Event) -> None:
         """Handle LOG_MESSAGE event."""

@@ -565,12 +565,14 @@ class TestModuleExports:
             ErrorPanel,
             WarningPanel,
             IterationHistoryPanel,
+            GitCommitLogPanel,
             create_status_bar,
             create_output_panel,
             create_claude_output_panel,
             create_error_panel,
             create_warning_panel,
             create_iteration_history_panel,
+            create_git_commit_log_panel,
         )
 
         assert StatusBar is not None
@@ -579,12 +581,14 @@ class TestModuleExports:
         assert ErrorPanel is not None
         assert WarningPanel is not None
         assert IterationHistoryPanel is not None
+        assert GitCommitLogPanel is not None
         assert callable(create_status_bar)
         assert callable(create_output_panel)
         assert callable(create_claude_output_panel)
         assert callable(create_error_panel)
         assert callable(create_warning_panel)
         assert callable(create_iteration_history_panel)
+        assert callable(create_git_commit_log_panel)
 
     def test_iteration_history_panel_importable(self):
         from zoyd.tui.panels import IterationHistoryPanel
@@ -605,6 +609,16 @@ class TestModuleExports:
         from zoyd.tui.panels import create_claude_output_panel
 
         assert callable(create_claude_output_panel)
+
+    def test_git_commit_log_panel_importable(self):
+        from zoyd.tui.panels import GitCommitLogPanel
+
+        assert GitCommitLogPanel is not None
+
+    def test_create_git_commit_log_panel_importable(self):
+        from zoyd.tui.panels import create_git_commit_log_panel
+
+        assert callable(create_git_commit_log_panel)
 
 
 class TestWarningPanel:
@@ -1337,3 +1351,241 @@ class TestCreateWarningPanel:
         assert "PRD Validation" in rendered
         assert "Line 5: Empty task text" in rendered
         assert "- [ ]" in rendered
+
+
+class TestGitCommitLogPanel:
+    def test_creates_panel(self):
+        from zoyd.tui.panels import GitCommitLogPanel
+
+        panel = GitCommitLogPanel()
+        assert panel is not None
+        assert panel.title == "Git Commits"
+
+    def test_custom_title(self):
+        from zoyd.tui.panels import GitCommitLogPanel
+
+        panel = GitCommitLogPanel(title="Session Commits")
+        assert panel.title == "Session Commits"
+
+    def test_custom_max_items(self):
+        from zoyd.tui.panels import GitCommitLogPanel
+
+        panel = GitCommitLogPanel(max_items=5)
+        assert panel.max_items == 5
+
+    def test_add_commit(self):
+        from zoyd.tui.panels import GitCommitLogPanel
+
+        panel = GitCommitLogPanel()
+        result = panel.add_commit(iteration=1, message="Initial commit")
+        assert result is panel  # Returns self for chaining
+        assert len(panel._commits) == 1
+        assert panel._commits[0]["iteration"] == 1
+        assert panel._commits[0]["message"] == "Initial commit"
+
+    def test_add_commit_with_hash(self):
+        from zoyd.tui.panels import GitCommitLogPanel
+
+        panel = GitCommitLogPanel()
+        panel.add_commit(iteration=1, message="Test", commit_hash="abc123def")
+        assert panel._commits[0]["hash"] == "abc123def"
+
+    def test_method_chaining(self):
+        from zoyd.tui.panels import GitCommitLogPanel
+
+        panel = GitCommitLogPanel()
+        panel.add_commit(iteration=1, message="A").add_commit(
+            iteration=2, message="B"
+        ).add_commit(iteration=3, message="C")
+        assert len(panel._commits) == 3
+
+    def test_max_items_trims_old(self):
+        from zoyd.tui.panels import GitCommitLogPanel
+
+        panel = GitCommitLogPanel(max_items=3)
+        for i in range(5):
+            panel.add_commit(iteration=i + 1, message=f"Commit {i + 1}")
+
+        assert len(panel._commits) == 3
+        # Should have kept the last 3
+        assert panel._commits[0]["iteration"] == 3
+        assert panel._commits[1]["iteration"] == 4
+        assert panel._commits[2]["iteration"] == 5
+
+    def test_clear(self):
+        from zoyd.tui.panels import GitCommitLogPanel
+
+        panel = GitCommitLogPanel()
+        panel.add_commit(iteration=1, message="A")
+        panel.add_commit(iteration=2, message="B")
+        result = panel.clear()
+        assert result is panel
+        assert len(panel._commits) == 0
+
+    def test_render_returns_panel(self):
+        from rich.panel import Panel
+
+        from zoyd.tui.panels import GitCommitLogPanel
+
+        panel = GitCommitLogPanel()
+        panel.add_commit(iteration=1, message="Test commit")
+        result = panel.render()
+        assert isinstance(result, Panel)
+
+    def test_render_empty_shows_placeholder(self):
+        from zoyd.tui.panels import GitCommitLogPanel
+
+        panel = GitCommitLogPanel()
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        console.print(panel.render())
+        rendered = output.getvalue()
+
+        assert "No commits yet" in rendered
+
+    def test_render_contains_iteration(self):
+        from zoyd.tui.panels import GitCommitLogPanel
+
+        panel = GitCommitLogPanel()
+        panel.add_commit(iteration=42, message="Test")
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        console.print(panel.render())
+        rendered = output.getvalue()
+
+        assert "42" in rendered
+
+    def test_render_contains_hash(self):
+        from zoyd.tui.panels import GitCommitLogPanel
+
+        panel = GitCommitLogPanel()
+        panel.add_commit(iteration=1, message="Test", commit_hash="abc123def456")
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        console.print(panel.render())
+        rendered = output.getvalue()
+
+        # Hash is truncated to first 7 chars
+        assert "abc123d" in rendered
+
+    def test_render_contains_message(self):
+        from zoyd.tui.panels import GitCommitLogPanel
+
+        panel = GitCommitLogPanel()
+        panel.add_commit(iteration=1, message="feat: add new feature")
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        console.print(panel.render())
+        rendered = output.getvalue()
+
+        assert "feat: add new feature" in rendered
+
+    def test_render_truncates_long_message(self):
+        from zoyd.tui.panels import GitCommitLogPanel
+
+        panel = GitCommitLogPanel()
+        long_msg = "This is a very long commit message that definitely exceeds the limit"
+        panel.add_commit(iteration=1, message=long_msg)
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        console.print(panel.render())
+        rendered = output.getvalue()
+
+        assert "..." in rendered
+
+    def test_render_multiple_commits(self):
+        from zoyd.tui.panels import GitCommitLogPanel
+
+        panel = GitCommitLogPanel()
+        panel.add_commit(iteration=1, message="First commit", commit_hash="aaa1111")
+        panel.add_commit(iteration=2, message="Second commit", commit_hash="bbb2222")
+        panel.add_commit(iteration=3, message="Third commit", commit_hash="ccc3333")
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        console.print(panel.render())
+        rendered = output.getvalue()
+
+        assert "1" in rendered
+        assert "2" in rendered
+        assert "3" in rendered
+
+    def test_render_no_hash_shows_dash(self):
+        from zoyd.tui.panels import GitCommitLogPanel
+
+        panel = GitCommitLogPanel()
+        panel.add_commit(iteration=1, message="Test")
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        console.print(panel.render())
+        rendered = output.getvalue()
+
+        # When no hash provided, should show dash
+        assert "-" in rendered
+
+    def test_print_method(self):
+        from zoyd.tui.panels import GitCommitLogPanel
+
+        panel = GitCommitLogPanel()
+        panel.add_commit(iteration=1, message="Test commit")
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        panel.print(console)
+        rendered = output.getvalue()
+
+        assert "Test commit" in rendered
+
+    def test_truncate_message_short(self):
+        from zoyd.tui.panels import GitCommitLogPanel
+
+        panel = GitCommitLogPanel()
+        assert panel._truncate_message("Short") == "Short"
+
+    def test_truncate_message_exact_limit(self):
+        from zoyd.tui.panels import GitCommitLogPanel
+
+        panel = GitCommitLogPanel()
+        msg = "x" * 50
+        assert panel._truncate_message(msg, max_len=50) == msg
+
+    def test_truncate_message_over_limit(self):
+        from zoyd.tui.panels import GitCommitLogPanel
+
+        panel = GitCommitLogPanel()
+        msg = "x" * 60
+        result = panel._truncate_message(msg, max_len=50)
+        assert len(result) == 50
+        assert result.endswith("...")
+
+
+class TestCreateGitCommitLogPanel:
+    def test_creates_panel(self):
+        from zoyd.tui.panels import create_git_commit_log_panel
+
+        panel = create_git_commit_log_panel()
+        assert panel is not None
+
+    def test_custom_title(self):
+        from zoyd.tui.panels import create_git_commit_log_panel
+
+        panel = create_git_commit_log_panel(title="Recent Commits")
+        assert panel.title == "Recent Commits"
+
+    def test_custom_max_items(self):
+        from zoyd.tui.panels import create_git_commit_log_panel
+
+        panel = create_git_commit_log_panel(max_items=20)
+        assert panel.max_items == 20
+
+    def test_returns_git_commit_log_panel_instance(self):
+        from zoyd.tui.panels import GitCommitLogPanel, create_git_commit_log_panel
+
+        panel = create_git_commit_log_panel()
+        assert isinstance(panel, GitCommitLogPanel)

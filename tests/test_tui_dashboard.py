@@ -150,6 +150,45 @@ class TestDashboardState:
 
         assert state.iteration_history[0]["status"] == "running"
 
+    # Commit log state tests
+    def test_commit_log_defaults(self) -> None:
+        """Test commit log defaults."""
+        state = DashboardState()
+        assert state.commit_log == []
+        assert state.max_commit_items == 10
+
+    def test_add_commit_to_log(self) -> None:
+        """Test adding a commit to the log."""
+        state = DashboardState()
+        state.add_commit_to_log(
+            iteration=1, message="feat: add new feature", commit_hash="abc123def"
+        )
+
+        assert len(state.commit_log) == 1
+        assert state.commit_log[0]["iteration"] == 1
+        assert state.commit_log[0]["message"] == "feat: add new feature"
+        assert state.commit_log[0]["hash"] == "abc123def"
+
+    def test_add_commit_to_log_without_hash(self) -> None:
+        """Test adding a commit without hash."""
+        state = DashboardState()
+        state.add_commit_to_log(iteration=1, message="Test commit")
+
+        assert state.commit_log[0]["hash"] is None
+
+    def test_add_commit_to_log_max_items(self) -> None:
+        """Test that commit log respects max items limit."""
+        state = DashboardState()
+        state.max_commit_items = 3
+
+        for i in range(5):
+            state.add_commit_to_log(iteration=i + 1, message=f"Commit {i + 1}")
+
+        assert len(state.commit_log) == 3
+        # Should keep the most recent items
+        assert state.commit_log[0]["iteration"] == 3
+        assert state.commit_log[2]["iteration"] == 5
+
 
 class TestDashboard:
     """Tests for Dashboard class."""
@@ -317,6 +356,22 @@ class TestDashboardRendering:
         result = dashboard._render_history()
         assert isinstance(result, Panel)
 
+    def test_render_commits_empty(self, dashboard: Dashboard) -> None:
+        """Test commits rendering with no commits."""
+        result = dashboard._render_commits()
+        assert isinstance(result, Panel)
+
+    def test_render_commits_with_items(self, dashboard: Dashboard) -> None:
+        """Test commits rendering with items."""
+        dashboard.state.add_commit_to_log(
+            iteration=1, message="feat: add feature", commit_hash="abc123d"
+        )
+        dashboard.state.add_commit_to_log(
+            iteration=2, message="fix: bug fix", commit_hash="def456e"
+        )
+        result = dashboard._render_commits()
+        assert isinstance(result, Panel)
+
     def test_full_render(self, dashboard: Dashboard) -> None:
         """Test rendering the complete dashboard."""
         result = dashboard._render()
@@ -474,6 +529,22 @@ class TestDashboardStateUpdates:
         assert dashboard.state.iteration_history[0]["status"] == "success"
         assert dashboard.state.iteration_history[0]["duration"] == 15.0
 
+    def test_add_commit(self, dashboard: Dashboard) -> None:
+        """Test adding a commit to the dashboard."""
+        result = dashboard.add_commit(1, "feat: add feature", commit_hash="abc123d")
+
+        assert result is dashboard
+        assert len(dashboard.state.commit_log) == 1
+        assert dashboard.state.commit_log[0]["iteration"] == 1
+        assert dashboard.state.commit_log[0]["message"] == "feat: add feature"
+        assert dashboard.state.commit_log[0]["hash"] == "abc123d"
+
+    def test_add_commit_without_hash(self, dashboard: Dashboard) -> None:
+        """Test adding a commit without hash."""
+        dashboard.add_commit(1, "Test commit")
+
+        assert dashboard.state.commit_log[0]["hash"] is None
+
 
 class TestDashboardEventHandlers:
     """Tests for Dashboard event handler integration."""
@@ -510,6 +581,7 @@ class TestDashboardEventHandlers:
         assert emitter.has_handlers(EventType.TASK_BLOCKED)
         assert emitter.has_handlers(EventType.COST_UPDATE)
         assert emitter.has_handlers(EventType.COST_LIMIT_EXCEEDED)
+        assert emitter.has_handlers(EventType.COMMIT_SUCCESS)
         assert emitter.has_handlers(EventType.LOG_MESSAGE)
 
     def test_on_loop_start(self, dashboard: Dashboard) -> None:
@@ -674,6 +746,29 @@ class TestDashboardEventHandlers:
 
         assert dashboard.state.error_message is not None
         assert "exceeded" in dashboard.state.error_message.lower()
+
+    def test_on_commit_success(self, dashboard: Dashboard) -> None:
+        """Test COMMIT_SUCCESS event handler."""
+        event = Event(
+            EventType.COMMIT_SUCCESS,
+            {"iteration": 5, "message": "feat: add new feature", "hash": "abc123d"},
+        )
+        dashboard._on_commit_success(event)
+
+        assert len(dashboard.state.commit_log) == 1
+        assert dashboard.state.commit_log[0]["iteration"] == 5
+        assert dashboard.state.commit_log[0]["message"] == "feat: add new feature"
+        assert dashboard.state.commit_log[0]["hash"] == "abc123d"
+
+    def test_on_commit_success_without_hash(self, dashboard: Dashboard) -> None:
+        """Test COMMIT_SUCCESS event handler without hash."""
+        event = Event(
+            EventType.COMMIT_SUCCESS,
+            {"iteration": 3, "message": "fix: bug fix"},
+        )
+        dashboard._on_commit_success(event)
+
+        assert dashboard.state.commit_log[0]["hash"] is None
 
     def test_on_log_message(self, dashboard: Dashboard) -> None:
         """Test LOG_MESSAGE event handler."""

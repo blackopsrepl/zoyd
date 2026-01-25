@@ -28,12 +28,14 @@ from zoyd.tui.panels import (
     ErrorPanel,
     WarningPanel,
     IterationHistoryPanel,
+    GitCommitLogPanel,
     create_status_bar,
     create_output_panel,
     create_claude_output_panel,
     create_error_panel,
     create_warning_panel,
     create_iteration_history_panel,
+    create_git_commit_log_panel,
 )
 
 # Re-export status rendering
@@ -93,12 +95,14 @@ __all__ = [
     "ErrorPanel",
     "WarningPanel",
     "IterationHistoryPanel",
+    "GitCommitLogPanel",
     "create_status_bar",
     "create_output_panel",
     "create_claude_output_panel",
     "create_error_panel",
     "create_warning_panel",
     "create_iteration_history_panel",
+    "create_git_commit_log_panel",
     # Status rendering
     "render_status",
     "print_status",
