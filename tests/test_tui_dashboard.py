@@ -994,6 +994,164 @@ class TestCreateDashboard:
         assert dashboard.refresh_per_second == 10
 
 
+class TestDashboardResize:
+    """Tests for Dashboard terminal resize handling."""
+
+    @pytest.fixture
+    def console(self) -> Console:
+        """Create a test console."""
+        return Console(file=StringIO(), force_terminal=True, width=120, height=40)
+
+    def test_compact_property_default(self, console: Console) -> None:
+        """Test compact property returns False by default for wide terminal."""
+        dashboard = Dashboard(console)
+        assert dashboard.compact is False
+
+    def test_compact_property_narrow_terminal(self) -> None:
+        """Test compact property returns True for narrow terminal."""
+        console = Console(file=StringIO(), force_terminal=True, width=50, height=40)
+        dashboard = Dashboard(console)
+        assert dashboard.compact is True
+
+    def test_compact_property_override(self, console: Console) -> None:
+        """Test compact property respects user override."""
+        dashboard = Dashboard(console, compact=True)
+        assert dashboard.compact is True
+        assert dashboard._compact_override is True
+
+    def test_compact_width_threshold(self) -> None:
+        """Test compact mode activates at threshold width."""
+        # At threshold - should not be compact
+        console_at = Console(file=StringIO(), force_terminal=True, width=60)
+        dashboard_at = Dashboard(console_at)
+        assert dashboard_at.compact is False
+
+        # Below threshold - should be compact
+        console_below = Console(file=StringIO(), force_terminal=True, width=59)
+        dashboard_below = Dashboard(console_below)
+        assert dashboard_below.compact is True
+
+    def test_handle_resize_recreates_layout(self, console: Console) -> None:
+        """Test that handle_resize recreates the layout."""
+        dashboard = Dashboard(console)
+        old_layout = dashboard._layout
+
+        dashboard.handle_resize()
+
+        # Layout should be a new instance
+        assert dashboard._layout is not old_layout
+
+    def test_handle_resize_returns_self(self, console: Console) -> None:
+        """Test handle_resize returns self for method chaining."""
+        dashboard = Dashboard(console)
+        result = dashboard.handle_resize()
+        assert result is dashboard
+
+    def test_install_resize_handler_on_unix(self, console: Console) -> None:
+        """Test resize handler is installed on Unix systems."""
+        import signal
+
+        if not hasattr(signal, "SIGWINCH"):
+            pytest.skip("SIGWINCH not available on this platform")
+
+        dashboard = Dashboard(console)
+
+        # Save original handler
+        original = signal.getsignal(signal.SIGWINCH)
+
+        try:
+            dashboard._install_resize_handler()
+
+            # Check handler was installed
+            current = signal.getsignal(signal.SIGWINCH)
+            assert current == dashboard._handle_resize
+
+            # Check old handler was saved
+            assert dashboard._old_sigwinch_handler == original
+        finally:
+            # Clean up
+            dashboard._restore_resize_handler()
+
+    def test_restore_resize_handler(self, console: Console) -> None:
+        """Test resize handler is properly restored."""
+        import signal
+
+        if not hasattr(signal, "SIGWINCH"):
+            pytest.skip("SIGWINCH not available on this platform")
+
+        dashboard = Dashboard(console)
+
+        # Save original handler
+        original = signal.getsignal(signal.SIGWINCH)
+
+        dashboard._install_resize_handler()
+        dashboard._restore_resize_handler()
+
+        # Check handler was restored
+        current = signal.getsignal(signal.SIGWINCH)
+        assert current == original
+        assert dashboard._old_sigwinch_handler is None
+
+    def test_context_manager_installs_handler(self, console: Console) -> None:
+        """Test context manager installs resize handler."""
+        import signal
+
+        if not hasattr(signal, "SIGWINCH"):
+            pytest.skip("SIGWINCH not available on this platform")
+
+        dashboard = Dashboard(console)
+
+        with dashboard:
+            # Handler should be installed
+            current = signal.getsignal(signal.SIGWINCH)
+            assert current == dashboard._handle_resize
+
+    def test_context_manager_restores_handler(self, console: Console) -> None:
+        """Test context manager restores resize handler on exit."""
+        import signal
+
+        if not hasattr(signal, "SIGWINCH"):
+            pytest.skip("SIGWINCH not available on this platform")
+
+        # Save original handler
+        original = signal.getsignal(signal.SIGWINCH)
+
+        dashboard = Dashboard(console)
+
+        with dashboard:
+            pass
+
+        # Handler should be restored
+        current = signal.getsignal(signal.SIGWINCH)
+        assert current == original
+
+    def test_internal_handle_resize_method(self, console: Console) -> None:
+        """Test _handle_resize method recreates layout."""
+        dashboard = Dashboard(console)
+        old_layout = dashboard._layout
+
+        # Call internal handler (simulating SIGWINCH)
+        dashboard._handle_resize(0, None)
+
+        # Layout should be new
+        assert dashboard._layout is not old_layout
+
+    def test_layout_changes_with_compact(self) -> None:
+        """Test layout changes based on compact mode."""
+        console_wide = Console(file=StringIO(), force_terminal=True, width=120)
+        console_narrow = Console(file=StringIO(), force_terminal=True, width=50)
+
+        dashboard_wide = Dashboard(console_wide)
+        dashboard_narrow = Dashboard(console_narrow)
+
+        # Wide should have larger banner size
+        wide_banner_size = dashboard_wide._layout["banner"].size
+        narrow_banner_size = dashboard_narrow._layout["banner"].size
+
+        # Compact mode uses smaller banner
+        assert narrow_banner_size < wide_banner_size
+
+
 class TestModuleExports:
     """Tests for module exports."""
 

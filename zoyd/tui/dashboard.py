@@ -8,12 +8,16 @@ Provides a full-screen dashboard layout with:
 - Progress: Multi-progress bars for tasks, iterations, and cost
 
 The dashboard uses Rich's Layout and Live components for real-time updates.
+It handles terminal resize events gracefully by reinstalling signal handlers
+and recreating the layout structure when SIGWINCH is received.
 """
 
 from __future__ import annotations
 
+import signal
+import sys
 from collections import deque
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable
 
 from rich.console import Group
 from rich.layout import Layout
@@ -22,7 +26,9 @@ from rich.panel import Panel
 from rich.text import Text
 
 from zoyd.prd import Task
-from zoyd.tui.banner import MIND_FLAYER_COMPACT, MIND_FLAYER_FULL
+# Note: The full ASCII art banner (MIND_FLAYER_COMPACT/FULL) is displayed
+# at startup by the CLI via print_banner(), not in the live dashboard.
+# The dashboard banner is a compact header bar showing title and status.
 from zoyd.tui.events import Event, EventEmitter, EventType
 from zoyd.tui.panels import (
     create_blocked_task_panel,
@@ -220,7 +226,14 @@ class Dashboard:
 
     The dashboard integrates with the EventEmitter to receive
     updates from the LoopRunner.
+
+    Terminal resize events (SIGWINCH) are handled gracefully by
+    recreating the layout structure with updated dimensions and
+    automatically switching to compact mode for narrow terminals.
     """
+
+    # Minimum terminal width before switching to compact mode
+    COMPACT_WIDTH_THRESHOLD = 60
 
     def __init__(
         self,
@@ -237,7 +250,7 @@ class Dashboard:
             refresh_per_second: How often to refresh the display.
         """
         self.console = console
-        self.compact = compact
+        self._compact_override = compact  # User-specified compact mode
         self.refresh_per_second = refresh_per_second
 
         # State
@@ -246,8 +259,24 @@ class Dashboard:
         # Live display
         self._live: Live | None = None
 
+        # Signal handler for terminal resize
+        self._old_sigwinch_handler: Callable[[int, Any], Any] | int | None = None
+
         # Create the layout structure
         self._layout = self._create_layout()
+
+    @property
+    def compact(self) -> bool:
+        """Return True if compact mode should be used.
+
+        Compact mode is enabled if explicitly set by user OR if the
+        terminal width is below the threshold.
+        """
+        if self._compact_override:
+            return True
+        if self.console.width is not None:
+            return self.console.width < self.COMPACT_WIDTH_THRESHOLD
+        return False
 
     def _create_layout(self) -> Layout:
         """Create the dashboard layout structure.
@@ -288,16 +317,18 @@ class Dashboard:
     def _render_banner(self) -> RenderableType:
         """Render the banner section.
 
+        The dashboard banner is a compact header bar showing ZOYD title and
+        current status. For narrow terminals (<60 cols), uses more compact
+        layout spacing. The full ASCII art banner is displayed at startup
+        by the CLI, not in the live dashboard.
+
         When in error state, the banner displays prominently with red styling
         to provide clear visual feedback about the error condition.
 
         Returns:
             Rich renderable for the banner.
         """
-        # Select compact or full banner based on mode
-        art = MIND_FLAYER_COMPACT if self.compact else MIND_FLAYER_FULL
-
-        # Just the title portion for the fixed header
+        # Build the title portion for the fixed header
         text = Text()
         text.append("ZOYD", style=f"bold {COLORS['psionic']}")
 
@@ -1034,14 +1065,72 @@ class Dashboard:
         if message:
             self.log(message)
 
+    # --- Terminal resize handling ---
+
+    def _handle_resize(self, signum: int, frame: Any) -> None:
+        """Handle terminal resize signal (SIGWINCH).
+
+        This method is called when the terminal is resized. It recreates
+        the layout structure with updated dimensions and refreshes the
+        display.
+
+        Args:
+            signum: The signal number (SIGWINCH).
+            frame: The current stack frame (unused).
+        """
+        # Recreate layout with potentially new compact mode setting
+        self._layout = self._create_layout()
+
+        # Refresh the display
+        self.refresh()
+
+    def _install_resize_handler(self) -> None:
+        """Install the SIGWINCH signal handler for terminal resize.
+
+        Saves the old handler so it can be restored on exit.
+        Only installs on Unix systems where SIGWINCH is available.
+        """
+        if hasattr(signal, "SIGWINCH"):
+            self._old_sigwinch_handler = signal.signal(
+                signal.SIGWINCH, self._handle_resize
+            )
+
+    def _restore_resize_handler(self) -> None:
+        """Restore the previous SIGWINCH signal handler.
+
+        Called when exiting the dashboard context to restore the
+        previous signal handler (if any).
+        """
+        if hasattr(signal, "SIGWINCH") and self._old_sigwinch_handler is not None:
+            signal.signal(signal.SIGWINCH, self._old_sigwinch_handler)
+            self._old_sigwinch_handler = None
+
+    def handle_resize(self) -> Dashboard:
+        """Manually trigger a resize handling.
+
+        This can be called programmatically to force the dashboard to
+        recalculate its layout based on the current terminal dimensions.
+
+        Returns:
+            Self for method chaining.
+        """
+        self._layout = self._create_layout()
+        self.refresh()
+        return self
+
     # --- Context manager ---
 
     def __enter__(self) -> Dashboard:
         """Enter the live dashboard context.
 
+        Installs a SIGWINCH handler to gracefully handle terminal resizes.
+
         Returns:
             Self for use in with statement.
         """
+        # Install resize handler before starting Live
+        self._install_resize_handler()
+
         self._live = Live(
             self._render(),
             console=self.console,
@@ -1053,10 +1142,16 @@ class Dashboard:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        """Exit the live dashboard context."""
+        """Exit the live dashboard context.
+
+        Restores the previous SIGWINCH handler.
+        """
         if self._live is not None:
             self._live.__exit__(exc_type, exc_val, exc_tb)
             self._live = None
+
+        # Restore the old resize handler
+        self._restore_resize_handler()
 
 
 def create_dashboard(
