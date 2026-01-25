@@ -281,3 +281,91 @@ class TestCLIConfigIntegration:
             result = runner.invoke(cli, ["run"])
             assert result.exit_code == 1
             assert "Error: PRD file 'nonexistent.md' does not exist" in result.output
+
+
+class TestConfigurationPanelCLI:
+    """Tests for the configuration panel displayed at startup."""
+
+    def test_config_panel_shows_prd(self, tmp_path):
+        """Configuration panel shows PRD path."""
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            Path("test.md").write_text("# Test\n- [ ] Task\n")
+            result = runner.invoke(cli, ["run", "--dry-run", "--prd", "test.md"])
+            # Configuration panel shows the PRD path
+            assert "Configuration" in result.output
+            assert "test.md" in result.output
+
+    def test_config_panel_shows_progress(self, tmp_path):
+        """Configuration panel shows progress file path."""
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            Path("test.md").write_text("# Test\n- [ ] Task\n")
+            result = runner.invoke(
+                cli, ["run", "--dry-run", "--prd", "test.md", "--progress", "my_progress.txt"]
+            )
+            assert "Configuration" in result.output
+            assert "my_progress.txt" in result.output
+
+    def test_config_panel_shows_iterations(self, tmp_path):
+        """Configuration panel shows iterations count."""
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            Path("test.md").write_text("# Test\n- [ ] Task\n")
+            result = runner.invoke(cli, ["run", "--dry-run", "--prd", "test.md", "-n", "5"])
+            assert "Configuration" in result.output
+            # Shows "0/5" since we start at iteration 0
+            assert "0/5" in result.output
+
+    def test_config_panel_shows_model(self, tmp_path):
+        """Configuration panel shows model when set."""
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            Path("test.md").write_text("# Test\n- [ ] Task\n")
+            result = runner.invoke(
+                cli, ["run", "--dry-run", "--prd", "test.md", "--model", "opus"]
+            )
+            assert "Configuration" in result.output
+            assert "opus" in result.output
+
+    def test_config_panel_shows_cost_limit(self, tmp_path):
+        """Configuration panel shows cost limit when set."""
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            Path("test.md").write_text("# Test\n- [ ] Task\n")
+            result = runner.invoke(
+                cli, ["run", "--dry-run", "--prd", "test.md", "--max-cost", "5.00"]
+            )
+            assert "Configuration" in result.output
+            # Shows cost limit
+            assert "Cost Limit" in result.output
+            assert "$5.00" in result.output
+
+    def test_config_panel_all_options(self, tmp_path):
+        """Configuration panel shows all options together."""
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            Path("test.md").write_text("# Test\n- [ ] Task\n")
+            result = runner.invoke(
+                cli,
+                [
+                    "run",
+                    "--dry-run",
+                    "--prd",
+                    "test.md",
+                    "--progress",
+                    "prog.txt",
+                    "-n",
+                    "10",
+                    "--model",
+                    "sonnet",
+                    "--max-cost",
+                    "2.50",
+                ],
+            )
+            assert "Configuration" in result.output
+            assert "test.md" in result.output
+            assert "prog.txt" in result.output
+            assert "0/10" in result.output
+            assert "sonnet" in result.output
+            assert "$2.50" in result.output

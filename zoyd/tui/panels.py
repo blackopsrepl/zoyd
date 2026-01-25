@@ -327,6 +327,9 @@ def create_status_bar(
     if prd:
         bar.add_item("PRD", prd)
 
+    if progress:
+        bar.add_item("Progress", progress)
+
     if iteration is not None:
         if max_iterations is not None:
             bar.add_item("Iteration", f"{iteration}/{max_iterations}")
@@ -351,6 +354,9 @@ def create_status_bar(
             bar.add_item("Cost", cost_str, style)
         else:
             bar.add_item("Cost", cost_str)
+    elif max_cost is not None:
+        # Show cost limit even when current cost is unknown
+        bar.add_item("Cost Limit", f"${max_cost:.2f}")
 
     return bar
 

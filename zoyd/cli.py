@@ -11,6 +11,7 @@ from .config import load_config
 from .loop import LoopRunner
 from .tui.banner import print_banner
 from .tui.console import create_console
+from .tui.panels import create_status_bar
 from .tui.status import print_status
 
 
@@ -143,6 +144,19 @@ def run(
         title=f"v{__version__}",
         subtitle="Autonomous Loop" if not dry_run else "Autonomous Loop [DRY RUN]",
     )
+
+    # Display configuration panel
+    config_bar = create_status_bar(
+        prd=str(prd_path),
+        progress=str(progress_path),
+        iteration=0,
+        max_iterations=max_iterations,
+        model=model,
+        max_cost=max_cost,
+    )
+    config_bar.title = "Configuration"
+    config_bar.print(console)
+    console.print()  # Add spacing after config panel
 
     # Validate PRD on startup
     prd_content = prd.read_prd(prd_path)
