@@ -1,5 +1,6 @@
 """Jail isolation - worktree and sandbox management for zoyd."""
 
+import shutil
 import subprocess
 import uuid
 from dataclasses import dataclass
@@ -28,8 +29,12 @@ class Jail:
         """Tear down the jail (worktree) on context exit."""
         self.teardown()
 
-    def setup(self) -> None:
+    def setup(self, copy_files: list[Path] | None = None) -> None:
         """Create the git worktree for this jail.
+
+        Args:
+            copy_files: Optional list of files to copy into the jail after creation.
+                        Useful for uncommitted files like PRD or progress files.
 
         Raises:
             JailError: If worktree creation fails.
@@ -61,6 +66,20 @@ class Jail:
             self._created = True
         except FileNotFoundError:
             raise JailError("git command not found")
+
+        # Copy uncommitted files from source into worktree
+        if copy_files:
+            for src_path in copy_files:
+                if src_path.exists():
+                    # Calculate relative path from source repo
+                    try:
+                        rel_path = src_path.relative_to(self.source_repo)
+                    except ValueError:
+                        rel_path = Path(src_path.name)
+
+                    dest_path = self.worktree_path / rel_path
+                    dest_path.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(src_path, dest_path)
 
     def teardown(self) -> None:
         """Remove the git worktree.

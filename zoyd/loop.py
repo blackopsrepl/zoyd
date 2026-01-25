@@ -150,9 +150,9 @@ def commit_changes(message: str, cwd: Path | None = None) -> tuple[bool, str]:
         Tuple of (success, output).
     """
     try:
-        # First stage all changes
+        # Stage all changes except PRD and progress files (those stay tracked but uncommitted)
         add_result = subprocess.run(
-            ["git", "add", "-A"],
+            ["git", "add", "-A", "--", ".", ":!PRD.md", ":!progress.txt", ":!*.PRD.md", ":!*progress.txt"],
             capture_output=True,
             text=True,
             check=False,
@@ -263,6 +263,7 @@ class LoopRunner:
         self.max_consecutive_failures = 3
         self.base_backoff = 2.0  # Base for exponential backoff
         self._jail: Jail | None = None
+        self._sync_succeeded = False
 
     def get_backoff_delay(self) -> float:
         """Calculate exponential backoff delay based on consecutive failures.
@@ -318,30 +319,6 @@ class LoopRunner:
 
         return jail.worktree_path / prd_rel, jail.worktree_path / progress_rel
 
-    def _copy_untracked_files_to_jail(self, jail_prd_path: Path, jail_progress_path: Path) -> None:
-        """Copy PRD and progress files to jail if they don't exist there.
-
-        Git worktrees only contain tracked files, so untracked files like PRD.md
-        need to be copied manually.
-
-        Args:
-            jail_prd_path: Destination path for PRD in jail.
-            jail_progress_path: Destination path for progress in jail.
-        """
-        import shutil
-
-        # Copy PRD file if it doesn't exist in jail (and paths differ)
-        if jail_prd_path != self.prd_path and not jail_prd_path.exists() and self.prd_path.exists():
-            jail_prd_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(self.prd_path, jail_prd_path)
-            self.log(f"Copied PRD to jail: {jail_prd_path}")
-
-        # Copy progress file if it doesn't exist in jail but exists in source (and paths differ)
-        if jail_progress_path != self.progress_path and not jail_progress_path.exists() and self.progress_path.exists():
-            jail_progress_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(self.progress_path, jail_progress_path)
-            self.log(f"Copied progress to jail: {jail_progress_path}")
-
     def run(self) -> int:
         """Run the main loop with jail isolation.
 
@@ -359,7 +336,8 @@ class LoopRunner:
         self._jail = create_jail(source_repo, worktree_base=self.jail_dir)
 
         try:
-            self._jail.setup()
+            # Copy PRD and progress files into jail (handles uncommitted files)
+            self._jail.setup(copy_files=[self.prd_path, self.progress_path])
             self.log(f"Created jail worktree at {self._jail.worktree_path}")
             self.log(f"Jail branch: {self._jail.branch_name}")
         except JailError as e:
@@ -369,19 +347,31 @@ class LoopRunner:
         # Get paths within the jail
         jail_prd_path, jail_progress_path = self._get_jail_paths(self._jail)
 
-        # Copy untracked files (PRD, progress) to jail - worktrees only have tracked files
-        self._copy_untracked_files_to_jail(jail_prd_path, jail_progress_path)
+        # Verify PRD exists in jail
+        if not jail_prd_path.exists():
+            print(f"Error: PRD file not found: {self.prd_path}")
+            print("Make sure the PRD file exists before running zoyd.")
+            self._jail.teardown()
+            return 3
 
         try:
-            return self._run_loop(jail_prd_path, jail_progress_path)
-        finally:
-            # Clean up jail on exit
-            if self._jail:
-                self.log("Tearing down jail...")
-                try:
-                    self._jail.teardown()
-                except JailError as e:
-                    self.log(f"Warning: Failed to clean up jail: {e}")
+            exit_code = self._run_loop(jail_prd_path, jail_progress_path)
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+            exit_code = 4
+
+        # Only teardown if sync succeeded (tracked by _sync_succeeded flag)
+        if self._sync_succeeded:
+            self.log("Tearing down jail...")
+            try:
+                self._jail.teardown()
+            except JailError as e:
+                self.log(f"Warning: Failed to clean up jail: {e}")
+        else:
+            print(f"Jail preserved for recovery: {self._jail.worktree_path}")
+            print(f"To manually sync: cd {self._jail.source_repo} && git merge {self._jail.branch_name}")
+
+        return exit_code
 
     def _run_loop(self, jail_prd_path: Path, jail_progress_path: Path) -> int:
         """Run the main loop inside the jail.
@@ -526,24 +516,12 @@ class LoopRunner:
         if not self._jail:
             return
 
-        import shutil
-
-        # Copy back untracked files (PRD, progress) - git merge won't include these
-        jail_prd_path, jail_progress_path = self._get_jail_paths(self._jail)
-
-        # Only copy if paths differ (avoids SameFileError in tests)
-        if jail_prd_path != self.prd_path and jail_prd_path.exists():
-            shutil.copy2(jail_prd_path, self.prd_path)
-            self.log(f"Copied PRD back from jail: {self.prd_path}")
-
-        if jail_progress_path != self.progress_path and jail_progress_path.exists():
-            shutil.copy2(jail_progress_path, self.progress_path)
-            self.log(f"Copied progress back from jail: {self.progress_path}")
-
-        # Sync tracked files via git merge
+        # Sync all tracked files (including PRD/progress) via git merge
         self.log("Syncing tracked changes to source repository...")
         success, message = self._jail.sync_to_source()
         if success:
+            self._sync_succeeded = True
             print(f"Synced: {message}")
         else:
-            self.log(f"Warning: Sync failed: {message}")
+            self._sync_succeeded = False
+            print(f"Sync failed: {message}")

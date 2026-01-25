@@ -75,6 +75,36 @@ class TestJail:
         assert "git command not found" in str(exc_info.value)
 
     @patch("zoyd.jail.subprocess.run")
+    def test_jail_setup_copy_files(self, mock_run, tmp_path):
+        """Test that setup copies uncommitted files into the jail."""
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        worktree_path = tmp_path / "worktree"
+        worktree_path.mkdir(parents=True)
+
+        # Create source files
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# My PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "subdir" / "progress.txt"
+        progress_file.parent.mkdir(parents=True)
+        progress_file.write_text("# Progress")
+        nonexistent_file = tmp_path / "does-not-exist.txt"
+
+        jail = Jail(
+            worktree_path=worktree_path,
+            branch_name="test-branch",
+            source_repo=tmp_path,
+        )
+        jail.setup(copy_files=[prd_file, progress_file, nonexistent_file])
+
+        # Check files were copied with correct relative paths
+        assert (worktree_path / "PRD.md").exists()
+        assert (worktree_path / "PRD.md").read_text() == "# My PRD\n- [ ] Task 1"
+        assert (worktree_path / "subdir" / "progress.txt").exists()
+        assert (worktree_path / "subdir" / "progress.txt").read_text() == "# Progress"
+        # Non-existent file should be silently skipped
+        assert not (worktree_path / "does-not-exist.txt").exists()
+
+    @patch("zoyd.jail.subprocess.run")
     def test_jail_teardown_success(self, mock_run, tmp_path):
         """Test successful jail teardown removes worktree."""
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
