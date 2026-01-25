@@ -606,7 +606,7 @@ class LoopRunner:
                         self.stats_iterations += 1
                         self.live.log_error(f"Claude returned error (code {return_code})")
                         if self.verbose:
-                            self.live.log(output)
+                            self.live.log_markdown(output)
 
                         # Fail-fast: exit immediately on first failure
                         if self.fail_fast:
@@ -643,7 +643,7 @@ class LoopRunner:
                         self.stats_successes += 1
                         self.stats_iterations += 1
                         if self.verbose:
-                            self.live.log(output)
+                            self.live.log_markdown(output)
 
                         # Check if Claude indicated it cannot complete the task
                         cannot_complete, reason = detect_cannot_complete(output)
