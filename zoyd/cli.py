@@ -9,9 +9,7 @@ import click
 from . import __version__, prd, progress
 from .config import load_config
 from .loop import LoopRunner
-from .tui.banner import print_banner
 from .tui.console import create_console
-from .tui.panels import create_status_bar, create_warning_panel
 from .tui.status import print_status
 
 
@@ -137,59 +135,10 @@ def run(
     if max_cost is None:
         max_cost = config.max_cost
 
-    # Display startup banner with version info
-    console = create_console(file=sys.stdout)
-    print_banner(
-        console=console,
-        title=f"v{__version__}",
-        subtitle="Autonomous Loop" if not dry_run else "Autonomous Loop [DRY RUN]",
-    )
-
-    # Display configuration panel
-    config_bar = create_status_bar(
-        prd=str(prd_path),
-        progress=str(progress_path),
-        iteration=0,
-        max_iterations=max_iterations,
-        model=model,
-        max_cost=max_cost,
-    )
-    config_bar.title = "Configuration"
-    config_bar.print(console)
-    console.print()  # Add spacing after config panel
-
-    # Validate PRD on startup
-    prd_content = prd.read_prd(prd_path)
-    validation_warnings = prd.validate_prd(prd_content)
-    if validation_warnings:
-        # Build warning items as (message, detail) tuples
-        warning_items = [
-            (f"Line {w.line_number}: {w.message}", w.line_content.strip())
-            for w in validation_warnings
-        ]
-        warning_panel = create_warning_panel(warning_items, title="PRD Validation")
-        warning_panel.print(console)
-        console.print()  # Add spacing after warning panel
-
-    # Handle resume mode
-    if resume:
-        if not progress_path.exists():
-            click.echo(f"Error: Cannot resume - progress file '{progress_path}' does not exist", err=True)
-            sys.exit(1)
-        progress_content = progress_path.read_text()
-        iteration_count = progress.get_iteration_count(progress_content)
-        if iteration_count == 0:
-            click.echo("Warning: Progress file exists but has no iterations recorded")
-        else:
-            click.echo(f"Resuming from iteration {iteration_count + 1}")
-        # Show completed tasks
-        prd_content = prd.read_prd(prd_path)
-        tasks = prd.parse_tasks(prd_content)
-        completed_tasks = [t for t in tasks if t.complete]
-        if completed_tasks:
-            click.echo(f"Skipping {len(completed_tasks)} completed task(s):")
-            for task in completed_tasks:
-                click.echo(f"  [x] {task.text}")
+    # Handle resume mode validation
+    if resume and not progress_path.exists():
+        click.echo(f"Error: Cannot resume - progress file '{progress_path}' does not exist", err=True)
+        sys.exit(1)
 
     runner = LoopRunner(
         prd_path=prd_path,

@@ -43,6 +43,20 @@ from zoyd.tui.progress import (
     create_cost_gauge,
 )
 
+# Re-export spinner components
+from zoyd.tui.spinners import (
+    MindFlayerSpinner,
+    SPINNER_DEFS,
+    DEFAULT_SPINNER,
+    create_spinner,
+    get_spinner_names,
+    get_spinner_frames,
+    get_spinner_interval,
+)
+
+# Re-export live display components
+from zoyd.tui.live import LiveDisplay, create_live_display
+
 # Future modules - imported when they exist
 # These will be uncommented as each module is implemented:
 # from zoyd.tui.events import EventType, EventEmitter
@@ -79,6 +93,17 @@ __all__ = [
     "CostGauge",
     "create_progress_panel",
     "create_cost_gauge",
+    # Live display
+    "LiveDisplay",
+    "create_live_display",
+    # Spinner components
+    "MindFlayerSpinner",
+    "SPINNER_DEFS",
+    "DEFAULT_SPINNER",
+    "create_spinner",
+    "get_spinner_names",
+    "get_spinner_frames",
+    "get_spinner_interval",
     # Future exports (uncomment when modules are implemented):
     # "EventType",
     # "EventEmitter",

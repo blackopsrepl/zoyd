@@ -1,0 +1,301 @@
+"""Live display for fixed banner with scrolling logs.
+
+Provides a Rich Live display that keeps the banner/status fixed at the top
+while allowing iteration logs to scroll underneath.
+"""
+
+from __future__ import annotations
+
+from collections import deque
+from typing import TYPE_CHECKING
+
+from rich.console import Group
+from rich.live import Live
+from rich.panel import Panel
+from rich.text import Text
+
+from zoyd.tui.panels import create_status_bar
+from zoyd.tui.spinners import MindFlayerSpinner
+from zoyd.tui.theme import COLORS
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from rich.console import Console, RenderableType
+
+
+class LiveDisplay:
+    """A live display with fixed banner and scrolling logs.
+
+    The display is split into two areas:
+    - Banner: Fixed at top, shows status bar with iteration, model, cost
+    - Logs: Scrolling area below showing recent log messages
+    """
+
+    def __init__(
+        self,
+        console: Console,
+        *,
+        prd_path: str = "",
+        progress_path: str = "",
+        max_iterations: int = 10,
+        model: str | None = None,
+        max_cost: float | None = None,
+        max_log_lines: int = 20,
+    ) -> None:
+        """Initialize the live display.
+
+        Args:
+            console: Rich Console to use for output.
+            prd_path: Path to the PRD file.
+            progress_path: Path to the progress file.
+            max_iterations: Maximum iterations allowed.
+            model: Claude model being used.
+            max_cost: Maximum cost limit in USD.
+            max_log_lines: Maximum number of log lines to show.
+        """
+        self.console = console
+        self.prd_path = prd_path
+        self.progress_path = progress_path
+        self.max_iterations = max_iterations
+        self.model = model
+        self.max_cost = max_cost
+        self.max_log_lines = max_log_lines
+
+        # State
+        self._iteration = 0
+        self._cost = 0.0
+        self._task_text: str | None = None
+        self._spinner: MindFlayerSpinner | None = None
+        self._log_lines: deque[Text] = deque(maxlen=max_log_lines)
+
+        # Live display
+        self._live: Live | None = None
+
+    @property
+    def iteration(self) -> int:
+        """Get the current iteration number."""
+        return self._iteration
+
+    @iteration.setter
+    def iteration(self, value: int) -> None:
+        """Set the current iteration number and refresh display."""
+        self._iteration = value
+        self._refresh()
+
+    @property
+    def cost(self) -> float:
+        """Get the current cost."""
+        return self._cost
+
+    @cost.setter
+    def cost(self, value: float) -> None:
+        """Set the current cost and refresh display."""
+        self._cost = value
+        self._refresh()
+
+    def set_task(self, text: str | None) -> None:
+        """Set the current task being worked on.
+
+        Args:
+            text: Task text, or None to clear.
+        """
+        self._task_text = text
+        self._refresh()
+
+    def start_spinner(self, text: str = "Invoking Claude...") -> None:
+        """Start the loading spinner.
+
+        Args:
+            text: Text to show next to the spinner.
+        """
+        self._spinner = MindFlayerSpinner(text=text)
+        self._refresh()
+
+    def stop_spinner(self) -> None:
+        """Stop the loading spinner."""
+        self._spinner = None
+        self._refresh()
+
+    def log(self, message: str, style: str | None = None) -> None:
+        """Add a log message to the scrolling area.
+
+        Args:
+            message: The message to log.
+            style: Optional Rich style for the message.
+        """
+        text = Text(message, style=style or "")
+        self._log_lines.append(text)
+        self._refresh()
+
+    def log_iteration_start(self, iteration: int, completed: int, total: int) -> None:
+        """Log the start of an iteration.
+
+        Args:
+            iteration: Iteration number.
+            completed: Number of completed tasks.
+            total: Total number of tasks.
+        """
+        self._iteration = iteration
+        self.log(
+            f"=== Iteration {iteration}/{self.max_iterations} ({completed}/{total} tasks) ===",
+            style="bold",
+        )
+
+    def log_success(self, message: str) -> None:
+        """Log a success message.
+
+        Args:
+            message: The success message.
+        """
+        self.log(f"[success]{message}", style="success")
+
+    def log_error(self, message: str) -> None:
+        """Log an error message.
+
+        Args:
+            message: The error message.
+        """
+        self.log(f"[error]{message}", style="error")
+
+    def log_warning(self, message: str) -> None:
+        """Log a warning message.
+
+        Args:
+            message: The warning message.
+        """
+        self.log(f"[warning]{message}", style="warning")
+
+    def _render_banner(self) -> RenderableType:
+        """Render the banner/status bar area.
+
+        Returns:
+            Rich renderable for the banner.
+        """
+        bar = create_status_bar(
+            prd=self.prd_path,
+            progress=self.progress_path,
+            iteration=self._iteration,
+            max_iterations=self.max_iterations,
+            model=self.model,
+            cost=self._cost if self._cost > 0 or self.max_cost else None,
+            max_cost=self.max_cost,
+        )
+        bar.title = "Status"
+        return bar.render()
+
+    def _render_task_line(self) -> RenderableType | None:
+        """Render the current task line with optional spinner.
+
+        Returns:
+            Rich renderable for the task line, or None.
+        """
+        if self._spinner is not None:
+            return self._spinner
+        if self._task_text:
+            return Text(f"Task: {self._task_text}", style="zoyd.task.active")
+        return None
+
+    def _render_logs(self) -> RenderableType:
+        """Render the scrolling log area.
+
+        Returns:
+            Rich renderable for the logs.
+        """
+        if not self._log_lines:
+            return Text("Waiting for activity...", style="dim")
+
+        # Join log lines with newlines
+        content = Text()
+        for i, line in enumerate(self._log_lines):
+            if i > 0:
+                content.append("\n")
+            content.append(line)
+
+        return Panel(
+            content,
+            title="[panel.title]Log[/]",
+            border_style=COLORS["twilight"],
+            padding=(0, 1),
+        )
+
+    def _render(self) -> RenderableType:
+        """Render the complete display.
+
+        Returns:
+            Rich renderable for the entire display.
+        """
+        components = [self._render_banner()]
+
+        task_line = self._render_task_line()
+        if task_line:
+            components.append(Text())  # Spacer
+            components.append(task_line)
+
+        components.append(Text())  # Spacer
+        components.append(self._render_logs())
+
+        return Group(*components)
+
+    def _refresh(self) -> None:
+        """Refresh the live display if active."""
+        if self._live is not None:
+            self._live.update(self._render())
+
+    def __enter__(self) -> LiveDisplay:
+        """Enter the live display context.
+
+        Returns:
+            Self for use in with statement.
+        """
+        self._live = Live(
+            self._render(),
+            console=self.console,
+            refresh_per_second=4,
+            transient=False,
+        )
+        self._live.__enter__()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Exit the live display context."""
+        if self._live is not None:
+            self._live.__exit__(exc_type, exc_val, exc_tb)
+            self._live = None
+
+
+def create_live_display(
+    console: Console,
+    *,
+    prd_path: str = "",
+    progress_path: str = "",
+    max_iterations: int = 10,
+    model: str | None = None,
+    max_cost: float | None = None,
+    max_log_lines: int = 20,
+) -> LiveDisplay:
+    """Create a live display instance.
+
+    Factory function for creating LiveDisplay.
+
+    Args:
+        console: Rich Console to use for output.
+        prd_path: Path to the PRD file.
+        progress_path: Path to the progress file.
+        max_iterations: Maximum iterations allowed.
+        model: Claude model being used.
+        max_cost: Maximum cost limit in USD.
+        max_log_lines: Maximum number of log lines to show.
+
+    Returns:
+        A configured LiveDisplay instance.
+    """
+    return LiveDisplay(
+        console,
+        prd_path=prd_path,
+        progress_path=progress_path,
+        max_iterations=max_iterations,
+        model=model,
+        max_cost=max_cost,
+        max_log_lines=max_log_lines,
+    )

@@ -269,8 +269,8 @@ class TestCLIConfigIntegration:
             Path("test.md").write_text("# Test\n- [ ] Task\n")
 
             result = runner.invoke(cli, ["run", "--dry-run"])
-            # Model config is used internally - verify run completes with banner
-            assert "ZOYD" in result.output or "Autonomous Loop" in result.output
+            # Model config is used - shown in status bar
+            assert "opus" in result.output
 
     def test_missing_prd_shows_error(self, tmp_path):
         """Shows error when PRD from config doesn't exist."""
@@ -287,25 +287,26 @@ class TestConfigurationPanelCLI:
     """Tests for the configuration panel displayed at startup."""
 
     def test_config_panel_shows_prd(self, tmp_path):
-        """Configuration panel shows PRD path."""
+        """Configuration panel shows PRD label."""
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
             Path("test.md").write_text("# Test\n- [ ] Task\n")
             result = runner.invoke(cli, ["run", "--dry-run", "--prd", "test.md"])
-            # Configuration panel shows the PRD path
-            assert "Configuration" in result.output
-            assert "test.md" in result.output
+            # Status bar shows PRD: label (path may be truncated)
+            assert "Status" in result.output
+            assert "PRD:" in result.output
 
     def test_config_panel_shows_progress(self, tmp_path):
-        """Configuration panel shows progress file path."""
+        """Configuration panel shows progress label."""
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
             Path("test.md").write_text("# Test\n- [ ] Task\n")
             result = runner.invoke(
                 cli, ["run", "--dry-run", "--prd", "test.md", "--progress", "my_progress.txt"]
             )
-            assert "Configuration" in result.output
-            assert "my_progress.txt" in result.output
+            assert "Status" in result.output
+            # Progress: label shown (path may be truncated)
+            assert "Progress:" in result.output
 
     def test_config_panel_shows_iterations(self, tmp_path):
         """Configuration panel shows iterations count."""
@@ -313,9 +314,9 @@ class TestConfigurationPanelCLI:
         with runner.isolated_filesystem(temp_dir=tmp_path):
             Path("test.md").write_text("# Test\n- [ ] Task\n")
             result = runner.invoke(cli, ["run", "--dry-run", "--prd", "test.md", "-n", "5"])
-            assert "Configuration" in result.output
-            # Shows "0/5" since we start at iteration 0
-            assert "0/5" in result.output
+            assert "Status" in result.output
+            # Shows iteration/max format
+            assert "/5" in result.output
 
     def test_config_panel_shows_model(self, tmp_path):
         """Configuration panel shows model when set."""
@@ -325,20 +326,20 @@ class TestConfigurationPanelCLI:
             result = runner.invoke(
                 cli, ["run", "--dry-run", "--prd", "test.md", "--model", "opus"]
             )
-            assert "Configuration" in result.output
+            assert "Status" in result.output
             assert "opus" in result.output
 
     def test_config_panel_shows_cost_limit(self, tmp_path):
-        """Configuration panel shows cost limit when set."""
+        """Configuration panel shows cost when set."""
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
             Path("test.md").write_text("# Test\n- [ ] Task\n")
             result = runner.invoke(
                 cli, ["run", "--dry-run", "--prd", "test.md", "--max-cost", "5.00"]
             )
-            assert "Configuration" in result.output
-            # Shows cost limit
-            assert "Cost Limit" in result.output
+            assert "Status" in result.output
+            # Shows cost in status bar
+            assert "Cost:" in result.output
             assert "$5.00" in result.output
 
     def test_config_panel_all_options(self, tmp_path):
@@ -363,9 +364,10 @@ class TestConfigurationPanelCLI:
                     "2.50",
                 ],
             )
-            assert "Configuration" in result.output
-            assert "test.md" in result.output
-            assert "prog.txt" in result.output
-            assert "0/10" in result.output
+            assert "Status" in result.output
+            # Check key labels are present (paths may be truncated)
+            assert "PRD:" in result.output
+            assert "Progress:" in result.output
+            assert "/10" in result.output
             assert "sonnet" in result.output
             assert "$2.50" in result.output

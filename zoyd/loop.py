@@ -1,13 +1,18 @@
 """Main loop orchestrator - invoke Claude Code repeatedly."""
 
+from __future__ import annotations
+
 import json as json_module
 import re
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
 from . import prd, progress
+from .tui.console import create_console
+from .tui.live import LiveDisplay, create_live_display
 
 # Patterns that indicate Claude cannot complete a task
 CANNOT_COMPLETE_PATTERNS = [
@@ -208,19 +213,26 @@ def invoke_claude(
         Tuple of (return_code, output, cost_usd). cost_usd is None if not tracking or unavailable.
     """
     # Enable sandbox mode via settings for filesystem/network isolation
-    sandbox_settings = '{"sandbox": {"enabled": true, "autoAllowBashIfSandboxed": true}}'
-    cmd = ["claude", "--print", "--permission-mode", "acceptEdits", "--settings", sandbox_settings]
+    # Claude expects --settings to be a file path, not inline JSON
+    sandbox_settings = {"sandbox": {"enabled": True, "autoAllowBashIfSandboxed": True}}
 
-    if model:
-        cmd.extend(["--model", model])
-
-    if track_cost:
-        cmd.extend(["--output-format", "json"])
-
-    # Prompt is passed as a positional argument, not via --prompt
-    cmd.append(prompt)
-
+    # Create a temp file for settings
+    settings_fd, settings_path = tempfile.mkstemp(suffix=".json", prefix="zoyd_settings_")
     try:
+        with open(settings_fd, "w") as f:
+            json_module.dump(sandbox_settings, f)
+
+        cmd = ["claude", "--print", "--permission-mode", "acceptEdits", "--settings", settings_path]
+
+        if model:
+            cmd.extend(["--model", model])
+
+        if track_cost:
+            cmd.extend(["--output-format", "json"])
+
+        # Prompt is passed as a positional argument, not via --prompt
+        cmd.append(prompt)
+
         result = subprocess.run(
             cmd,
             capture_output=True,
@@ -250,6 +262,9 @@ def invoke_claude(
         return 1, "Error: 'claude' command not found. Is Claude Code installed?", None
     except Exception as e:
         return 1, f"Error invoking Claude: {e}", None
+    finally:
+        # Clean up temp file
+        Path(settings_path).unlink(missing_ok=True)
 
 
 def format_duration(seconds: float) -> str:
@@ -296,6 +311,15 @@ class LoopRunner:
         self.resume = resume
         self.fail_fast = fail_fast
         self.max_cost = max_cost
+        # Create live display for TUI output
+        self.live = create_live_display(
+            create_console(),
+            prd_path=str(self.prd_path),
+            progress_path=str(self.progress_path),
+            max_iterations=self.max_iterations,
+            model=self.model,
+            max_cost=self.max_cost,
+        )
         self.consecutive_failures = 0
         self.max_consecutive_failures = 3
         self.base_backoff = 2.0  # Base for exponential backoff
@@ -338,40 +362,35 @@ class LoopRunner:
 
         return ", ".join(parts)
 
-    def log(self, message: str) -> None:
-        """Print a log message if verbose mode is enabled."""
-        if self.verbose:
-            print(f"[zoyd] {message}", file=sys.stderr)
-
     def print_summary(self) -> None:
         """Print summary statistics at end of run."""
-        print("\n=== Summary ===")
+        self.live.log("=== Summary ===", style="bold")
 
         # Total time
         if self.start_time:
             total_time = time.time() - self.start_time
-            print(f"Total time: {format_duration(total_time)}")
+            self.live.log(f"Total time: {format_duration(total_time)}")
 
         # Iterations
-        print(f"Iterations: {self.stats_iterations}")
+        self.live.log(f"Iterations: {self.stats_iterations}")
 
         # Success rate
         total_attempts = self.stats_successes + self.stats_failures
         if total_attempts > 0:
             success_rate = (self.stats_successes / total_attempts) * 100
-            print(f"Success rate: {success_rate:.1f}% ({self.stats_successes}/{total_attempts})")
+            self.live.log(f"Success rate: {success_rate:.1f}% ({self.stats_successes}/{total_attempts})")
         else:
-            print("Success rate: N/A (no iterations run)")
+            self.live.log("Success rate: N/A (no iterations run)")
 
         # Tasks completed
         tasks_completed_this_run = self.stats_tasks_completed_end - self.stats_tasks_completed_start
-        print(f"Tasks completed: {tasks_completed_this_run} ({self.stats_tasks_completed_end}/{self.stats_total_tasks} total)")
+        self.live.log(f"Tasks completed: {tasks_completed_this_run} ({self.stats_tasks_completed_end}/{self.stats_total_tasks} total)")
 
         # Cost tracking (only show if we tracked cost)
         if self.max_cost is not None or self.stats_total_cost > 0:
-            print(f"Total cost: ${self.stats_total_cost:.4f}")
+            self.live.log(f"Total cost: ${self.stats_total_cost:.4f}")
             if self.max_cost is not None:
-                print(f"Cost limit: ${self.max_cost:.2f}")
+                self.live.log(f"Cost limit: ${self.max_cost:.2f}")
 
     def run(self) -> int:
         """Run the main loop.
@@ -382,7 +401,7 @@ class LoopRunner:
         # Track run start time
         self.start_time = time.time()
 
-        # Verify PRD exists
+        # Verify PRD exists (before creating live display)
         if not self.prd_path.exists():
             print(f"Error: PRD file not found: {self.prd_path}")
             print("Make sure the PRD file exists before running zoyd.")
@@ -396,8 +415,6 @@ class LoopRunner:
         progress_content = progress.read_progress(self.progress_path)
         iteration = progress.get_iteration_count(progress_content) + 1
 
-        self.log(f"Starting at iteration {iteration}")
-
         # Initialize statistics tracking
         prd_content = prd.read_prd(self.prd_path)
         tasks = prd.parse_tasks(prd_content)
@@ -405,163 +422,191 @@ class LoopRunner:
         self.stats_tasks_completed_start = completed
         self.stats_total_tasks = total
 
-        try:
-            while iteration <= self.max_iterations:
-                # Track iteration start time
-                iteration_start = time.time()
+        with self.live:
+            self.live.iteration = iteration
+            if self.verbose:
+                self.live.log(f"[zoyd] Starting at iteration {iteration}", style="dim")
 
-                # Read current state
-                prd_content = prd.read_prd(self.prd_path)
-                progress_content = progress.read_progress(self.progress_path)
-                tasks = prd.parse_tasks(prd_content)
-                completed, total = prd.get_completion_status(tasks)
+            # Validate PRD and show any warnings
+            validation_warnings = prd.validate_prd(prd_content)
+            if validation_warnings:
+                self.live.log_warning("PRD Validation:")
+                for warning in validation_warnings:
+                    self.live.log(f"  Line {warning.line_number}: {warning.message}")
 
-                print(f"\n=== Iteration {iteration}/{self.max_iterations} ({completed}/{total} tasks) ===")
-                print(f"Rate limit: {self.get_rate_limit_status()}")
+            try:
+                while iteration <= self.max_iterations:
+                    # Track iteration start time
+                    iteration_start = time.time()
 
-                # Show elapsed time in verbose mode
-                if self.verbose and self.start_time:
-                    elapsed = time.time() - self.start_time
-                    self.log(f"Elapsed time: {format_duration(elapsed)}")
+                    # Read current state
+                    prd_content = prd.read_prd(self.prd_path)
+                    progress_content = progress.read_progress(self.progress_path)
+                    tasks = prd.parse_tasks(prd_content)
+                    completed, total = prd.get_completion_status(tasks)
 
-                # Check if all tasks complete
-                if prd.is_all_complete(tasks):
-                    print("All tasks complete!")
-                    self.stats_tasks_completed_end = completed
-                    self.print_summary()
-                    return 0
+                    # Update live display
+                    self.live.iteration = iteration
+                    self.live.cost = self.stats_total_cost
+                    self.live.log_iteration_start(iteration, completed, total)
+                    self.live.log(f"Rate limit: {self.get_rate_limit_status()}")
 
-                # Show next task
-                next_task = prd.get_next_incomplete_task(tasks)
-                if next_task:
-                    print(f"Next task: {next_task.text}")
+                    # Show elapsed time in verbose mode
+                    if self.verbose and self.start_time:
+                        elapsed = time.time() - self.start_time
+                        self.live.log(f"[zoyd] Elapsed time: {format_duration(elapsed)}", style="dim")
 
-                # Build prompt
-                prompt = build_prompt(
-                    prd_content=prd_content,
-                    progress_content=progress_content,
-                    iteration=iteration,
-                    completed=completed,
-                    total=total,
-                )
-
-                if self.dry_run:
-                    print("\n--- DRY RUN: Would send prompt ---")
-                    print(prompt)
-                    print("--- END PROMPT ---\n")
-                    iteration += 1
-                    continue
-
-                # Invoke Claude in sandbox mode
-                self.log("Invoking Claude in sandbox mode...")
-                track_cost = self.max_cost is not None
-                return_code, output, cost_usd = invoke_claude(
-                    prompt, self.model, track_cost=track_cost
-                )
-
-                # Track cost if available
-                if cost_usd is not None:
-                    self.stats_total_cost += cost_usd
-                    self.log(f"Iteration cost: ${cost_usd:.4f}, Total: ${self.stats_total_cost:.4f}")
-
-                    # Check if we've exceeded max cost
-                    if self.max_cost is not None and self.stats_total_cost >= self.max_cost:
-                        print(f"Cost limit exceeded: ${self.stats_total_cost:.4f} >= ${self.max_cost:.2f}")
+                    # Check if all tasks complete
+                    if prd.is_all_complete(tasks):
+                        self.live.log_success("All tasks complete!")
                         self.stats_tasks_completed_end = completed
+                        self.print_summary()
+                        return 0
+
+                    # Show next task
+                    next_task = prd.get_next_incomplete_task(tasks)
+                    if next_task:
+                        self.live.set_task(next_task.text)
+                        self.live.log(f"Next task: {next_task.text}")
+
+                    # Build prompt
+                    prompt = build_prompt(
+                        prd_content=prd_content,
+                        progress_content=progress_content,
+                        iteration=iteration,
+                        completed=completed,
+                        total=total,
+                    )
+
+                    if self.dry_run:
+                        self.live.log("--- DRY RUN: Would send prompt ---")
+                        self.live.log(prompt)
+                        self.live.log("--- END PROMPT ---")
+                        iteration += 1
+                        continue
+
+                    # Invoke Claude in sandbox mode with spinner
+                    self.live.start_spinner("Invoking Claude...")
+                    if self.verbose:
+                        self.live.log("[zoyd] Invoking Claude in sandbox mode...", style="dim")
+
+                    track_cost = self.max_cost is not None
+                    return_code, output, cost_usd = invoke_claude(
+                        prompt, self.model, track_cost=track_cost
+                    )
+                    self.live.stop_spinner()
+
+                    # Track cost if available
+                    if cost_usd is not None:
+                        self.stats_total_cost += cost_usd
+                        self.live.cost = self.stats_total_cost
+                        if self.verbose:
+                            self.live.log(f"[zoyd] Iteration cost: ${cost_usd:.4f}, Total: ${self.stats_total_cost:.4f}", style="dim")
+
+                        # Check if we've exceeded max cost
+                        if self.max_cost is not None and self.stats_total_cost >= self.max_cost:
+                            self.live.log_error(f"Cost limit exceeded: ${self.stats_total_cost:.4f} >= ${self.max_cost:.2f}")
+                            self.stats_tasks_completed_end = completed
+                            self.stats_iterations += 1
+                            self.stats_successes += 1
+                            self.print_summary()
+                            return 4  # Exit code 4 for cost limit exceeded
+
+                    if return_code != 0:
+                        self.consecutive_failures += 1
+                        self.stats_failures += 1
                         self.stats_iterations += 1
-                        self.stats_successes += 1
-                        self.print_summary()
-                        return 4  # Exit code 4 for cost limit exceeded
+                        self.live.log_error(f"Claude returned error (code {return_code})")
+                        if self.verbose:
+                            self.live.log(output)
 
-                if return_code != 0:
-                    self.consecutive_failures += 1
-                    self.stats_failures += 1
-                    self.stats_iterations += 1
-                    print(f"Claude returned error (code {return_code})")
-                    if self.verbose:
-                        print(output)
+                        # Fail-fast: exit immediately on first failure
+                        if self.fail_fast:
+                            self.live.log_error("Fail-fast mode: exiting on first failure")
+                            self.stats_tasks_completed_end = completed
+                            self.print_summary()
+                            return 2
 
-                    # Fail-fast: exit immediately on first failure
-                    if self.fail_fast:
-                        print("Fail-fast mode: exiting on first failure")
-                        self.stats_tasks_completed_end = completed
-                        self.print_summary()
-                        return 2
+                        if self.consecutive_failures >= self.max_consecutive_failures:
+                            self.live.log_error(f"Too many consecutive failures ({self.consecutive_failures})")
+                            self.stats_tasks_completed_end = completed
+                            self.print_summary()
+                            return 2
 
-                    if self.consecutive_failures >= self.max_consecutive_failures:
-                        print(f"Too many consecutive failures ({self.consecutive_failures})")
-                        self.stats_tasks_completed_end = completed
-                        self.print_summary()
-                        return 2
-
-                    # Apply exponential backoff on failure
-                    backoff = self.get_backoff_delay()
-                    self.log(f"Backing off for {backoff:.1f}s after failure {self.consecutive_failures}")
-                    time.sleep(backoff)
-                else:
-                    self.consecutive_failures = 0
-                    self.stats_successes += 1
-                    self.stats_iterations += 1
-                    if self.verbose:
-                        print(output)
-
-                    # Check if Claude indicated it cannot complete the task
-                    cannot_complete, reason = detect_cannot_complete(output)
-                    if cannot_complete:
-                        print(f"[BLOCKED] Claude cannot complete task: {reason}")
-                        self.log(f"Task blocked - detected pattern: {reason}")
+                        # Apply exponential backoff on failure
+                        backoff = self.get_backoff_delay()
+                        if self.verbose:
+                            self.live.log(f"[zoyd] Backing off for {backoff:.1f}s after failure {self.consecutive_failures}", style="dim")
+                        time.sleep(backoff)
                     else:
-                        # Auto-commit if enabled and iteration succeeded
-                        if self.auto_commit and next_task:
-                            self.log("Generating commit message...")
-                            commit_msg = generate_commit_message(
-                                output, next_task.text, self.model
-                            )
-                            if commit_msg:
-                                self.log("Creating commit...")
-                                success, commit_output = commit_changes(commit_msg)
-                                if success:
-                                    print(f"Committed: {commit_msg.split(chr(10))[0]}")
-                                else:
-                                    self.log(f"Commit failed: {commit_output}")
-                            else:
-                                self.log("Failed to generate commit message")
+                        self.consecutive_failures = 0
+                        self.stats_successes += 1
+                        self.stats_iterations += 1
+                        if self.verbose:
+                            self.live.log(output)
 
-                # Record progress (with blocked status if detected)
-                cannot_complete, reason = detect_cannot_complete(output)
-                progress.append_iteration(
-                    self.progress_path,
-                    iteration,
-                    output,
-                    cannot_complete=cannot_complete,
-                    cannot_complete_reason=reason,
-                )
-                self.log(f"Recorded iteration {iteration}")
+                        # Check if Claude indicated it cannot complete the task
+                        cannot_complete, reason = detect_cannot_complete(output)
+                        if cannot_complete:
+                            self.live.log_warning(f"[BLOCKED] Claude cannot complete task: {reason}")
+                            if self.verbose:
+                                self.live.log(f"[zoyd] Task blocked - detected pattern: {reason}", style="dim")
+                        else:
+                            # Auto-commit if enabled and iteration succeeded
+                            if self.auto_commit and next_task:
+                                if self.verbose:
+                                    self.live.log("[zoyd] Generating commit message...", style="dim")
+                                commit_msg = generate_commit_message(
+                                    output, next_task.text, self.model
+                                )
+                                if commit_msg:
+                                    if self.verbose:
+                                        self.live.log("[zoyd] Creating commit...", style="dim")
+                                    success, commit_output = commit_changes(commit_msg)
+                                    if success:
+                                        self.live.log_success(f"Committed: {commit_msg.split(chr(10))[0]}")
+                                    elif self.verbose:
+                                        self.live.log(f"[zoyd] Commit failed: {commit_output}", style="dim")
+                                elif self.verbose:
+                                    self.live.log("[zoyd] Failed to generate commit message", style="dim")
 
-                # Show iteration timing in verbose mode
-                if self.verbose:
-                    iteration_duration = time.time() - iteration_start
-                    self.log(f"Iteration {iteration} completed in {format_duration(iteration_duration)}")
+                    # Record progress (with blocked status if detected)
+                    cannot_complete, reason = detect_cannot_complete(output)
+                    progress.append_iteration(
+                        self.progress_path,
+                        iteration,
+                        output,
+                        cannot_complete=cannot_complete,
+                        cannot_complete_reason=reason,
+                    )
+                    if self.verbose:
+                        self.live.log(f"[zoyd] Recorded iteration {iteration}", style="dim")
 
-                iteration += 1
+                    # Show iteration timing in verbose mode
+                    if self.verbose:
+                        iteration_duration = time.time() - iteration_start
+                        self.live.log(f"[zoyd] Iteration {iteration} completed in {format_duration(iteration_duration)}", style="dim")
 
-                # Rate limiting pause between iterations
-                if iteration <= self.max_iterations and self.delay > 0:
-                    time.sleep(self.delay)
+                    iteration += 1
+                    self.live.set_task(None)
 
-            print(f"Reached max iterations ({self.max_iterations})")
-            # Get final task count
-            tasks = prd.parse_tasks(prd.read_prd(self.prd_path))
-            completed, _ = prd.get_completion_status(tasks)
-            self.stats_tasks_completed_end = completed
-            self.print_summary()
-            return 1
+                    # Rate limiting pause between iterations
+                    if iteration <= self.max_iterations and self.delay > 0:
+                        time.sleep(self.delay)
 
-        except KeyboardInterrupt:
-            print("\nInterrupted by user")
-            # Get final task count
-            tasks = prd.parse_tasks(prd.read_prd(self.prd_path))
-            completed, _ = prd.get_completion_status(tasks)
-            self.stats_tasks_completed_end = completed
-            self.print_summary()
-            return 130
+                self.live.log(f"Reached max iterations ({self.max_iterations})")
+                # Get final task count
+                tasks = prd.parse_tasks(prd.read_prd(self.prd_path))
+                completed, _ = prd.get_completion_status(tasks)
+                self.stats_tasks_completed_end = completed
+                self.print_summary()
+                return 1
+
+            except KeyboardInterrupt:
+                self.live.log("\nInterrupted by user")
+                # Get final task count
+                tasks = prd.parse_tasks(prd.read_prd(self.prd_path))
+                completed, _ = prd.get_completion_status(tasks)
+                self.stats_tasks_completed_end = completed
+                self.print_summary()
+                return 130
