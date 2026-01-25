@@ -1328,7 +1328,8 @@ class TestMaxCostCLI:
             "--max-cost", "10.50",
             "--dry-run",
         ])
-        assert "Max cost: $10.50" in result.output
+        # Max cost is shown in the summary at the end
+        assert "Cost limit: $10.50" in result.output
 
 
 class TestInvokeClaudeCostTracking:

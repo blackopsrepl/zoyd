@@ -9,6 +9,7 @@ import click
 from . import __version__, prd, progress
 from .config import load_config
 from .loop import LoopRunner
+from .tui.banner import print_banner
 from .tui.console import create_console
 from .tui.status import print_status
 
@@ -135,16 +136,13 @@ def run(
     if max_cost is None:
         max_cost = config.max_cost
 
-    click.echo(f"Zoyd v{__version__}")
-    click.echo(f"PRD: {prd_path}")
-    click.echo(f"Progress: {progress_path}")
-    click.echo(f"Max iterations: {max_iterations}")
-    if model:
-        click.echo(f"Model: {model}")
-    if max_cost is not None:
-        click.echo(f"Max cost: ${max_cost:.2f}")
-    if dry_run:
-        click.echo("Mode: DRY RUN")
+    # Display startup banner with version info
+    console = create_console(file=sys.stdout)
+    print_banner(
+        console=console,
+        title=f"v{__version__}",
+        subtitle="Autonomous Loop" if not dry_run else "Autonomous Loop [DRY RUN]",
+    )
 
     # Validate PRD on startup
     prd_content = prd.read_prd(prd_path)
