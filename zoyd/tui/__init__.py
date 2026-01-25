@@ -66,9 +66,8 @@ from zoyd.tui.events import (
     create_event_emitter,
 )
 
-# Future modules - imported when they exist
-# These will be uncommented as each module is implemented:
-# from zoyd.tui.dashboard import Dashboard
+# Dashboard components
+from zoyd.tui.dashboard import Dashboard, DashboardState, create_dashboard
 
 __all__ = [
     # Theme
@@ -118,6 +117,8 @@ __all__ = [
     "Event",
     "EventHandler",
     "create_event_emitter",
-    # Future exports (uncomment when modules are implemented):
-    # "Dashboard",
+    # Dashboard
+    "Dashboard",
+    "DashboardState",
+    "create_dashboard",
 ]
