@@ -63,7 +63,14 @@ from zoyd.tui.spinners import (
 )
 
 # Re-export live display components
-from zoyd.tui.live import LiveDisplay, create_live_display
+from zoyd.tui.live import (
+    LiveDisplay,
+    PlainDisplay,
+    DashboardDisplay,
+    create_live_display,
+    create_plain_display,
+    create_dashboard_display,
+)
 
 # Re-export event system
 from zoyd.tui.events import (
@@ -126,7 +133,11 @@ __all__ = [
     "create_cost_gauge",
     # Live display
     "LiveDisplay",
+    "PlainDisplay",
+    "DashboardDisplay",
     "create_live_display",
+    "create_plain_display",
+    "create_dashboard_display",
     # Spinner components
     "MindFlayerSpinner",
     "SPINNER_DEFS",

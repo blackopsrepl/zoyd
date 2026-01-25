@@ -97,6 +97,12 @@ def cli():
     default=False,
     help="Disable Rich TUI and use plain text output",
 )
+@click.option(
+    "--fullscreen",
+    is_flag=True,
+    default=False,
+    help="Enable fullscreen dashboard mode with rich layout",
+)
 @click.pass_context
 def run(
     ctx: click.Context,
@@ -112,6 +118,7 @@ def run(
     fail_fast: bool | None,
     max_cost: float | None,
     no_tui: bool,
+    fullscreen: bool,
 ):
     """Run the Zoyd loop against a PRD file.
 
@@ -164,6 +171,7 @@ def run(
         fail_fast=fail_fast,
         max_cost=max_cost,
         tui_enabled=not no_tui,
+        fullscreen=fullscreen,
     )
 
     exit_code = runner.run()

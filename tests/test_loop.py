@@ -2227,3 +2227,219 @@ class TestCreatePlainDisplay:
         assert display.max_iterations == 20
         assert display.model == "sonnet"
         assert display.max_cost == 10.0
+
+
+class TestFullscreen:
+    """Tests for fullscreen dashboard mode."""
+
+    def test_fullscreen_default_false(self, tmp_path):
+        """Test that fullscreen is disabled by default."""
+        prd = tmp_path / "PRD.md"
+        prd.write_text("# Tasks\n- [ ] Test task")
+        runner = LoopRunner(prd_path=prd, progress_path=tmp_path / "progress.txt")
+        assert runner.fullscreen is False
+
+    def test_fullscreen_can_be_enabled(self, tmp_path):
+        """Test that fullscreen can be enabled."""
+        prd = tmp_path / "PRD.md"
+        prd.write_text("# Tasks\n- [ ] Test task")
+        runner = LoopRunner(
+            prd_path=prd, progress_path=tmp_path / "progress.txt", fullscreen=True
+        )
+        assert runner.fullscreen is True
+
+    def test_dashboard_display_used_when_fullscreen(self, tmp_path):
+        """Test that DashboardDisplay is used when fullscreen=True."""
+        from zoyd.tui.live import DashboardDisplay
+
+        prd = tmp_path / "PRD.md"
+        prd.write_text("# Tasks\n- [ ] Test task")
+        runner = LoopRunner(
+            prd_path=prd,
+            progress_path=tmp_path / "progress.txt",
+            fullscreen=True,
+        )
+        assert isinstance(runner.live, DashboardDisplay)
+
+    def test_live_display_used_when_not_fullscreen(self, tmp_path):
+        """Test that LiveDisplay is used when fullscreen=False."""
+        from zoyd.tui.live import LiveDisplay
+
+        prd = tmp_path / "PRD.md"
+        prd.write_text("# Tasks\n- [ ] Test task")
+        runner = LoopRunner(
+            prd_path=prd,
+            progress_path=tmp_path / "progress.txt",
+            fullscreen=False,
+        )
+        assert isinstance(runner.live, LiveDisplay)
+
+    def test_plain_display_overrides_fullscreen(self, tmp_path):
+        """Test that tui_enabled=False overrides fullscreen=True."""
+        from zoyd.tui.live import PlainDisplay
+
+        prd = tmp_path / "PRD.md"
+        prd.write_text("# Tasks\n- [ ] Test task")
+        runner = LoopRunner(
+            prd_path=prd,
+            progress_path=tmp_path / "progress.txt",
+            fullscreen=True,
+            tui_enabled=False,
+        )
+        assert isinstance(runner.live, PlainDisplay)
+
+
+class TestFullscreenCLI:
+    """Tests for --fullscreen CLI flag."""
+
+    def test_fullscreen_flag_in_help(self):
+        """Test that --fullscreen appears in help."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["run", "--help"])
+        assert result.exit_code == 0
+        assert "--fullscreen" in result.output
+        assert "fullscreen dashboard mode" in result.output
+
+    def test_fullscreen_with_dry_run(self, tmp_path):
+        """Test that --fullscreen works with --dry-run."""
+        runner = CliRunner()
+        prd = tmp_path / "PRD.md"
+        # Use a completed task so we get exit code 0
+        prd.write_text("# Tasks\n- [x] Completed task")
+        progress_file = tmp_path / "progress.txt"
+
+        # --fullscreen with --dry-run should work (doesn't actually enter fullscreen)
+        result = runner.invoke(
+            cli,
+            ["run", "--prd", str(prd), "--progress", str(progress_file), "--fullscreen", "--dry-run", "-n", "1"],
+        )
+        # Should complete successfully since all tasks are done
+        assert result.exit_code == 0
+
+
+class TestDashboardDisplay:
+    """Tests for DashboardDisplay class."""
+
+    def test_dashboard_display_init(self):
+        """Test DashboardDisplay initialization."""
+        rich = pytest.importorskip("rich")
+        from zoyd.tui.console import create_console
+        from zoyd.tui.live import DashboardDisplay
+
+        console = create_console()
+        display = DashboardDisplay(
+            console,
+            prd_path="test.md",
+            progress_path="progress.txt",
+            max_iterations=10,
+            model="opus",
+            max_cost=5.0,
+        )
+        assert display.prd_path == "test.md"
+        assert display.progress_path == "progress.txt"
+        assert display.max_iterations == 10
+        assert display.model == "opus"
+        assert display.max_cost == 5.0
+
+    def test_dashboard_display_iteration_property(self):
+        """Test DashboardDisplay iteration property."""
+        rich = pytest.importorskip("rich")
+        from zoyd.tui.console import create_console
+        from zoyd.tui.live import DashboardDisplay
+
+        console = create_console()
+        display = DashboardDisplay(console, prd_path="test.md", max_iterations=10)
+
+        assert display.iteration == 0
+        display.iteration = 5
+        assert display.iteration == 5
+        # Verify dashboard state was updated
+        assert display._dashboard.state.iteration == 5
+
+    def test_dashboard_display_cost_property(self):
+        """Test DashboardDisplay cost property."""
+        rich = pytest.importorskip("rich")
+        from zoyd.tui.console import create_console
+        from zoyd.tui.live import DashboardDisplay
+
+        console = create_console()
+        display = DashboardDisplay(console, prd_path="test.md", max_iterations=10)
+
+        assert display.cost == 0.0
+        display.cost = 1.5
+        assert display.cost == 1.5
+        # Verify dashboard state was updated
+        assert display._dashboard.state.cost == 1.5
+
+    def test_dashboard_display_set_task(self):
+        """Test DashboardDisplay.set_task method."""
+        rich = pytest.importorskip("rich")
+        from zoyd.tui.console import create_console
+        from zoyd.tui.live import DashboardDisplay
+
+        console = create_console()
+        display = DashboardDisplay(console, prd_path="test.md", max_iterations=10)
+
+        display.set_task("Task 1")
+        assert display._task_text == "Task 1"
+        display.set_task(None)
+        assert display._task_text is None
+
+    def test_dashboard_display_log_methods(self):
+        """Test DashboardDisplay logging methods don't error."""
+        rich = pytest.importorskip("rich")
+        from zoyd.tui.console import create_console
+        from zoyd.tui.live import DashboardDisplay
+
+        console = create_console()
+        display = DashboardDisplay(console, prd_path="test.md", max_iterations=10)
+
+        # These should not raise errors
+        display.log("Test message")
+        display.log_success("Success message")
+        display.log_error("Error message")
+        display.log_warning("Warning message")
+        display.log_iteration_start(1, 0, 5)
+        display.start_spinner("Loading...")
+        display.stop_spinner()
+
+
+class TestCreateDashboardDisplay:
+    """Tests for create_dashboard_display factory function."""
+
+    def test_create_dashboard_display_defaults(self):
+        """Test create_dashboard_display with default values."""
+        rich = pytest.importorskip("rich")
+        from zoyd.tui.console import create_console
+        from zoyd.tui.live import create_dashboard_display
+
+        console = create_console()
+        display = create_dashboard_display(console)
+        assert display.prd_path == ""
+        assert display.progress_path == ""
+        assert display.max_iterations == 10
+        assert display.model is None
+        assert display.max_cost is None
+
+    def test_create_dashboard_display_with_options(self):
+        """Test create_dashboard_display with custom options."""
+        rich = pytest.importorskip("rich")
+        from zoyd.tui.console import create_console
+        from zoyd.tui.live import create_dashboard_display
+
+        console = create_console()
+        display = create_dashboard_display(
+            console,
+            prd_path="my_prd.md",
+            progress_path="my_progress.txt",
+            max_iterations=20,
+            model="sonnet",
+            max_cost=10.0,
+            compact=True,
+            refresh_per_second=8,
+        )
+        assert display.prd_path == "my_prd.md"
+        assert display.progress_path == "my_progress.txt"
+        assert display.max_iterations == 20
+        assert display.model == "sonnet"
+        assert display.max_cost == 10.0

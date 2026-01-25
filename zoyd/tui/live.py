@@ -478,3 +478,250 @@ def create_plain_display(
         model=model,
         max_cost=max_cost,
     )
+
+
+class DashboardDisplay:
+    """A fullscreen dashboard display using Rich Layout.
+
+    Provides the same interface as LiveDisplay but uses the Dashboard class
+    for a full-screen TUI experience with rich layout sections for:
+    - Banner with ZOYD branding
+    - Task tree with completion status
+    - Claude output with Markdown rendering
+    - Progress bars for iterations and cost
+    - Git commit history
+    """
+
+    def __init__(
+        self,
+        console: Console,
+        *,
+        prd_path: str = "",
+        progress_path: str = "",
+        max_iterations: int = 10,
+        model: str | None = None,
+        max_cost: float | None = None,
+        compact: bool = False,
+        refresh_per_second: int = 4,
+    ) -> None:
+        """Initialize the dashboard display.
+
+        Args:
+            console: Rich Console to use for output.
+            prd_path: Path to the PRD file.
+            progress_path: Path to the progress file.
+            max_iterations: Maximum iterations allowed.
+            model: Claude model being used.
+            max_cost: Maximum cost limit in USD.
+            compact: Use compact layout for narrow terminals.
+            refresh_per_second: How often to refresh the display.
+        """
+        from zoyd.tui.dashboard import Dashboard
+
+        self.console = console
+        self.prd_path = prd_path
+        self.progress_path = progress_path
+        self.max_iterations = max_iterations
+        self.model = model
+        self.max_cost = max_cost
+
+        # Create the dashboard
+        self._dashboard = Dashboard(
+            console,
+            compact=compact,
+            refresh_per_second=refresh_per_second,
+        )
+
+        # Configure dashboard with initial state
+        self._dashboard.set_config(
+            prd_path=prd_path,
+            progress_path=progress_path,
+            model=model,
+            max_iterations=max_iterations,
+            max_cost=max_cost,
+        )
+
+        # Internal state (for property access)
+        self._iteration = 0
+        self._cost = 0.0
+        self._task_text: str | None = None
+
+    @property
+    def iteration(self) -> int:
+        """Get the current iteration number."""
+        return self._iteration
+
+    @iteration.setter
+    def iteration(self, value: int) -> None:
+        """Set the current iteration number and update dashboard."""
+        self._iteration = value
+        self._dashboard.set_iteration(value)
+
+    @property
+    def cost(self) -> float:
+        """Get the current cost."""
+        return self._cost
+
+    @cost.setter
+    def cost(self, value: float) -> None:
+        """Set the current cost and update dashboard."""
+        self._cost = value
+        self._dashboard.set_cost(value)
+
+    @property
+    def events(self):
+        """Get the dashboard for event connection.
+
+        This allows LoopRunner to connect events to the dashboard.
+        """
+        return self._dashboard
+
+    def set_task(self, text: str | None) -> None:
+        """Set the current task being worked on.
+
+        Args:
+            text: Task text, or None to clear.
+        """
+        self._task_text = text
+        # Find the matching task in the dashboard and set it as active
+        if text:
+            for task in self._dashboard.state.tasks:
+                if task.text == text:
+                    self._dashboard.set_active_task(task)
+                    break
+        else:
+            self._dashboard.set_active_task(None)
+
+    def set_tasks(self, tasks) -> None:
+        """Set the task list for the dashboard.
+
+        Args:
+            tasks: List of Task objects.
+        """
+        self._dashboard.set_tasks(tasks)
+
+    def start_spinner(self, text: str = "Invoking Claude...") -> None:
+        """Start the loading spinner.
+
+        Args:
+            text: Text to show next to the spinner.
+        """
+        self._dashboard.set_status(text)
+
+    def stop_spinner(self) -> None:
+        """Stop the loading spinner."""
+        self._dashboard.set_status("Ready")
+
+    def log(self, message: str, style: str | None = None) -> None:
+        """Add a log message to the dashboard.
+
+        Args:
+            message: The message to log.
+            style: Optional Rich style for the message.
+        """
+        # Strip Rich tags if present
+        import re
+        plain_message = re.sub(r'\[/?[^\]]+\]', '', message)
+        self._dashboard.log(plain_message)
+
+    def log_iteration_start(self, iteration: int, completed: int, total: int) -> None:
+        """Log the start of an iteration.
+
+        Args:
+            iteration: Iteration number.
+            completed: Number of completed tasks.
+            total: Total number of tasks.
+        """
+        self._iteration = iteration
+        self._dashboard.set_iteration(iteration)
+        self._dashboard.state.tasks_completed = completed
+        self._dashboard.state.tasks_total = total
+        self._dashboard.log(f"Starting iteration {iteration}/{self.max_iterations}")
+
+    def log_success(self, message: str) -> None:
+        """Log a success message.
+
+        Args:
+            message: The success message.
+        """
+        self._dashboard.log(f"✓ {message}")
+        self._dashboard.clear_error()
+
+    def log_error(self, message: str) -> None:
+        """Log an error message.
+
+        Args:
+            message: The error message.
+        """
+        self._dashboard.set_error(message)
+
+    def log_warning(self, message: str) -> None:
+        """Log a warning message.
+
+        Args:
+            message: The warning message.
+        """
+        self._dashboard.set_warning(message)
+
+    def set_output(self, output: str) -> None:
+        """Set the Claude output for display.
+
+        Args:
+            output: Claude's output text.
+        """
+        self._dashboard.set_output(output)
+
+    def __enter__(self) -> "DashboardDisplay":
+        """Enter the fullscreen dashboard context.
+
+        Returns:
+            Self for use in with statement.
+        """
+        self._dashboard.set_running(True)
+        self._dashboard.__enter__()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Exit the fullscreen dashboard context."""
+        self._dashboard.set_running(False)
+        self._dashboard.__exit__(exc_type, exc_val, exc_tb)
+
+
+def create_dashboard_display(
+    console: Console,
+    *,
+    prd_path: str = "",
+    progress_path: str = "",
+    max_iterations: int = 10,
+    model: str | None = None,
+    max_cost: float | None = None,
+    compact: bool = False,
+    refresh_per_second: int = 4,
+) -> DashboardDisplay:
+    """Create a fullscreen dashboard display instance.
+
+    Factory function for creating DashboardDisplay for fullscreen mode.
+
+    Args:
+        console: Rich Console to use for output.
+        prd_path: Path to the PRD file.
+        progress_path: Path to the progress file.
+        max_iterations: Maximum iterations allowed.
+        model: Claude model being used.
+        max_cost: Maximum cost limit in USD.
+        compact: Use compact layout for narrow terminals.
+        refresh_per_second: How often to refresh the display.
+
+    Returns:
+        A configured DashboardDisplay instance.
+    """
+    return DashboardDisplay(
+        console,
+        prd_path=prd_path,
+        progress_path=progress_path,
+        max_iterations=max_iterations,
+        model=model,
+        max_cost=max_cost,
+        compact=compact,
+        refresh_per_second=refresh_per_second,
+    )
