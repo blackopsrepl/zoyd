@@ -45,7 +45,12 @@ When you complete a task:
 
 Status: Iteration {iteration}, {completed}/{total} tasks complete
 
-## PRD
+## Current Task (COMPLETE THIS ONLY)
+{current_task}
+
+IMPORTANT: Work on ONLY this task. Do NOT work on other tasks. One task = one commit.
+
+## PRD (for context only)
 {prd_content}
 
 ## Progress Log
@@ -103,6 +108,7 @@ def build_prompt(
     iteration: int,
     completed: int,
     total: int,
+    current_task: str,
 ) -> str:
     """Build the prompt for Claude.
 
@@ -112,6 +118,7 @@ def build_prompt(
         iteration: Current iteration number.
         completed: Number of completed tasks.
         total: Total number of tasks.
+        current_task: Text of the current task to complete.
 
     Returns:
         Formatted prompt string.
@@ -120,6 +127,7 @@ def build_prompt(
         iteration=iteration,
         completed=completed,
         total=total,
+        current_task=current_task,
         prd_content=prd_content,
         progress_content=progress_content or "(No progress yet)",
     )
@@ -570,6 +578,7 @@ class LoopRunner:
                         iteration=iteration,
                         completed=completed,
                         total=total,
+                        current_task=next_task.text if next_task else "(No incomplete tasks)",
                     )
 
                     if self.dry_run:

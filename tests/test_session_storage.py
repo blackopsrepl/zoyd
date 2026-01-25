@@ -1243,3 +1243,26 @@ class TestCreateStorageFactory:
         assert storage.port == 6380
         assert storage.db == 2
         assert storage.password == "secret"
+
+    def test_create_storage_redis_import_error_message(self):
+        """Test create_storage raises helpful ImportError when redis not installed."""
+        import builtins
+        import sys
+
+        original_import = builtins.__import__
+
+        def mock_import(name, *args, **kwargs):
+            if name == "redis":
+                raise ImportError("No module named 'redis'")
+            return original_import(name, *args, **kwargs)
+
+        # Temporarily remove redis from sys.modules if present
+        redis_module = sys.modules.pop("redis", None)
+        try:
+            builtins.__import__ = mock_import
+            with pytest.raises(ImportError, match="pip install 'zoyd\\[redis\\]'"):
+                create_storage(backend="redis")
+        finally:
+            builtins.__import__ = original_import
+            if redis_module is not None:
+                sys.modules["redis"] = redis_module

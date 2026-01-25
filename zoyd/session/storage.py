@@ -1140,6 +1140,13 @@ def create_storage(
     if _backend == "file":
         return FileStorage(base_path=_sessions_dir)
     elif _backend == "redis":
+        try:
+            import redis as _redis_check  # noqa: F401
+        except ImportError:
+            raise ImportError(
+                "Redis storage backend requires the 'redis' package. "
+                "Install it with: pip install 'zoyd[redis]' or pipx inject zoyd redis"
+            ) from None
         return RedisStorage(
             host=_redis_host,
             port=_redis_port,

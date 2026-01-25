@@ -182,11 +182,17 @@ class TestBuildPrompt:
             iteration=1,
             completed=0,
             total=1,
+            current_task="Task 1",
         )
         assert "Iteration 1" in prompt
         assert "0/1 tasks complete" in prompt
         assert "# PRD" in prompt
         assert "- [ ] Task 1" in prompt
+        # Check for new current task section
+        assert "## Current Task (COMPLETE THIS ONLY)" in prompt
+        assert "Task 1" in prompt
+        assert "IMPORTANT: Work on ONLY this task" in prompt
+        assert "One task = one commit" in prompt
 
     def test_build_prompt_empty_progress(self):
         """Test that empty progress shows placeholder."""
@@ -196,8 +202,23 @@ class TestBuildPrompt:
             iteration=1,
             completed=0,
             total=1,
+            current_task="Task 1",
         )
         assert "(No progress yet)" in prompt
+
+    def test_build_prompt_current_task_displayed(self):
+        """Test that current task is highlighted in the prompt."""
+        prompt = build_prompt(
+            prd_content="# PRD\n- [ ] Task A\n- [ ] Task B",
+            progress_content="",
+            iteration=1,
+            completed=0,
+            total=2,
+            current_task="Task A",
+        )
+        assert "## Current Task (COMPLETE THIS ONLY)" in prompt
+        assert "Task A" in prompt
+        assert "Do NOT work on other tasks" in prompt
 
 
 class TestAutoCommit:
@@ -1173,7 +1194,7 @@ class TestPrdValidationCLI:
         prd_file.write_text("# Project\n- [ ] Valid task\n- [x] Completed task\n")
         progress_file = tmp_path / "progress.txt"
 
-        result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--progress", str(progress_file), "--dry-run", "-n", "1", "--no-tui"])
+        result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--progress", str(progress_file), "--dry-run", "-n", "1", "--no-tui", "--no-session-log"])
         assert "prd validation" not in result.output.lower()
 
     def test_empty_task_text_warning(self, tmp_path):
@@ -1183,7 +1204,7 @@ class TestPrdValidationCLI:
         prd_file.write_text("# Project\n- [ ]\n- [ ] Valid task\n")
         progress_file = tmp_path / "progress.txt"
 
-        result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--progress", str(progress_file), "--dry-run", "-n", "1", "--no-tui"])
+        result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--progress", str(progress_file), "--dry-run", "-n", "1", "--no-tui", "--no-session-log"])
         assert "prd validation" in result.output.lower()
         assert "Empty task text" in result.output
 
@@ -1194,7 +1215,7 @@ class TestPrdValidationCLI:
         prd_file.write_text("# Project\n-[]\n- [ ] Valid task\n")
         progress_file = tmp_path / "progress.txt"
 
-        result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--progress", str(progress_file), "--dry-run", "-n", "1", "--no-tui"])
+        result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--progress", str(progress_file), "--dry-run", "-n", "1", "--no-tui", "--no-session-log"])
         assert "prd validation" in result.output.lower()
         assert "Missing space" in result.output
 
@@ -1205,7 +1226,7 @@ class TestPrdValidationCLI:
         prd_file.write_text("# Project\n- [ ]\n-[]\n- [ ] Valid task\n")
         progress_file = tmp_path / "progress.txt"
 
-        result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--progress", str(progress_file), "--dry-run", "-n", "1", "--no-tui"])
+        result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--progress", str(progress_file), "--dry-run", "-n", "1", "--no-tui", "--no-session-log"])
         assert "prd validation" in result.output.lower()
         assert "Empty task text" in result.output
         assert "Missing space" in result.output
@@ -1217,7 +1238,7 @@ class TestPrdValidationCLI:
         prd_file.write_text("# Project\n- [ ]\n")
         progress_file = tmp_path / "progress.txt"
 
-        result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--progress", str(progress_file), "--dry-run", "-n", "1", "--no-tui"])
+        result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--progress", str(progress_file), "--dry-run", "-n", "1", "--no-tui", "--no-session-log"])
         assert "Line 2" in result.output
 
     def test_validation_does_not_stop_execution(self, tmp_path):
@@ -1227,7 +1248,7 @@ class TestPrdValidationCLI:
         prd_file.write_text("# Project\n- [ ]\n- [ ] Valid task\n")
         progress_file = tmp_path / "progress.txt"
 
-        result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--progress", str(progress_file), "--dry-run", "-n", "1", "--no-tui"])
+        result = runner.invoke(cli, ["run", "--prd", str(prd_file), "--progress", str(progress_file), "--dry-run", "-n", "1", "--no-tui", "--no-session-log"])
         # Should show warning but continue to summary
         assert "prd validation" in result.output.lower()
         assert "Summary" in result.output
