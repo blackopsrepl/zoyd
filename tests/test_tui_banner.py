@@ -7,62 +7,55 @@ rich = pytest.importorskip("rich")
 
 
 class TestBannerConstants:
-    def test_mind_flayer_full_exists(self):
-        from zoyd.tui.banner import MIND_FLAYER_FULL
+    def test_zoyd_banner_exists(self):
+        from zoyd.tui.banner import ZOYD_BANNER
 
-        assert isinstance(MIND_FLAYER_FULL, str)
-        assert len(MIND_FLAYER_FULL) > 0
+        assert isinstance(ZOYD_BANNER, str)
+        assert len(ZOYD_BANNER) > 0
 
-    def test_mind_flayer_compact_exists(self):
-        from zoyd.tui.banner import MIND_FLAYER_COMPACT
-
-        assert isinstance(MIND_FLAYER_COMPACT, str)
-        assert len(MIND_FLAYER_COMPACT) > 0
-
-    def test_full_banner_contains_title_elements(self):
-        from zoyd.tui.banner import MIND_FLAYER_FULL
+    def test_banner_contains_title_elements(self):
+        from zoyd.tui.banner import ZOYD_BANNER
 
         # The banner uses Unicode box drawing characters for ZOYD title
         # Just verify it contains the distinctive block elements
-        assert "███" in MIND_FLAYER_FULL  # Block characters from ASCII art
+        assert "███" in ZOYD_BANNER  # Block characters from ASCII art
 
-    def test_compact_banner_contains_zoyd_title(self):
-        from zoyd.tui.banner import MIND_FLAYER_COMPACT
+    def test_banner_contains_autonomous_loop(self):
+        from zoyd.tui.banner import ZOYD_BANNER
 
-        # Should contain ZOYD in the ASCII art title
-        assert "ZOYD" in MIND_FLAYER_COMPACT or "Z O Y D" in MIND_FLAYER_COMPACT
+        # Should contain AUTONOMOUS LOOP text
+        assert "AUTONOMOUS" in ZOYD_BANNER.upper()
+        assert "LOOP" in ZOYD_BANNER.upper()
 
-    def test_full_banner_is_wider_than_compact(self):
-        from zoyd.tui.banner import MIND_FLAYER_COMPACT, MIND_FLAYER_FULL
+    def test_banner_contains_braille_characters(self):
+        from zoyd.tui.banner import ZOYD_BANNER
 
-        # Get max line width of each
-        full_width = max(len(line) for line in MIND_FLAYER_FULL.split("\n"))
-        compact_width = max(len(line) for line in MIND_FLAYER_COMPACT.split("\n"))
-        assert full_width > compact_width
+        # The mind flayer uses braille characters (U+2800-U+28FF)
+        # Check for presence of any braille characters
+        has_braille = any(
+            "\u2800" <= char <= "\u28FF" for char in ZOYD_BANNER
+        )
+        assert has_braille, "Banner should contain braille characters for mind flayer art"
 
-    def test_compact_banner_fits_narrow_terminal(self):
-        from zoyd.tui.banner import MIND_FLAYER_COMPACT
+    def test_banner_is_multiline(self):
+        from zoyd.tui.banner import ZOYD_BANNER
 
-        # Compact banner should fit in < 60 columns
-        max_width = max(len(line) for line in MIND_FLAYER_COMPACT.split("\n"))
-        assert max_width < 60
+        lines = ZOYD_BANNER.strip().split("\n")
+        assert len(lines) > 10  # Should be a substantial banner
 
 
 class TestGetBannerText:
-    def test_returns_full_by_default(self):
-        from zoyd.tui.banner import MIND_FLAYER_FULL, get_banner_text
+    def test_returns_zoyd_banner(self):
+        from zoyd.tui.banner import ZOYD_BANNER, get_banner_text
 
-        assert get_banner_text() == MIND_FLAYER_FULL
+        assert get_banner_text() == ZOYD_BANNER
 
-    def test_returns_compact_when_requested(self):
-        from zoyd.tui.banner import MIND_FLAYER_COMPACT, get_banner_text
+    def test_returns_string(self):
+        from zoyd.tui.banner import get_banner_text
 
-        assert get_banner_text(compact=True) == MIND_FLAYER_COMPACT
-
-    def test_returns_full_when_compact_false(self):
-        from zoyd.tui.banner import MIND_FLAYER_FULL, get_banner_text
-
-        assert get_banner_text(compact=False) == MIND_FLAYER_FULL
+        result = get_banner_text()
+        assert isinstance(result, str)
+        assert len(result) > 0
 
 
 class TestPrintBanner:
@@ -81,21 +74,6 @@ class TestPrintBanner:
         print_banner(console=console)
 
         # Should have produced some output
-        result = output.getvalue()
-        assert len(result) > 0
-
-    def test_print_banner_compact_mode(self):
-        from io import StringIO
-
-        from rich.console import Console
-
-        from zoyd.tui.banner import print_banner
-
-        output = StringIO()
-        console = Console(file=output, force_terminal=True, width=100)
-
-        print_banner(console=console, compact=True)
-
         result = output.getvalue()
         assert len(result) > 0
 
@@ -129,23 +107,6 @@ class TestPrintBanner:
         result = output.getvalue()
         assert "Subtitle Here" in result
 
-    def test_print_banner_auto_compact_for_narrow_terminal(self):
-        from io import StringIO
-
-        from rich.console import Console
-
-        from zoyd.tui.banner import MIND_FLAYER_COMPACT, print_banner
-
-        output = StringIO()
-        # Console with narrow width should trigger compact mode
-        console = Console(file=output, force_terminal=True, width=40)
-
-        print_banner(console=console)
-
-        result = output.getvalue()
-        # Compact banner should be used (contains "Z O Y D")
-        assert "Z O Y D" in result
-
     def test_print_banner_without_console_creates_one(self):
         # This tests that print_banner works when no console is provided
         # We can't easily capture the output, but we can verify it doesn't crash
@@ -161,13 +122,22 @@ class TestPrintBanner:
 class TestBannerModuleImports:
     def test_exports_are_available(self):
         from zoyd.tui.banner import (
-            MIND_FLAYER_COMPACT,
-            MIND_FLAYER_FULL,
+            ZOYD_BANNER,
             get_banner_text,
             print_banner,
         )
 
-        assert MIND_FLAYER_FULL is not None
-        assert MIND_FLAYER_COMPACT is not None
+        assert ZOYD_BANNER is not None
+        assert callable(print_banner)
+        assert callable(get_banner_text)
+
+    def test_tui_init_exports_banner(self):
+        from zoyd.tui import (
+            ZOYD_BANNER,
+            get_banner_text,
+            print_banner,
+        )
+
+        assert ZOYD_BANNER is not None
         assert callable(print_banner)
         assert callable(get_banner_text)

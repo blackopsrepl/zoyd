@@ -15,7 +15,7 @@ from zoyd.tui.theme import ZOYD_THEME, COLORS
 from zoyd.tui.console import console, get_console
 
 # Re-export banner components
-from zoyd.tui.banner import print_banner, MIND_FLAYER_FULL, MIND_FLAYER_COMPACT
+from zoyd.tui.banner import print_banner, get_banner_text, ZOYD_BANNER
 
 # Re-export task tree visualization
 from zoyd.tui.task_tree import render_task_tree
@@ -97,8 +97,8 @@ __all__ = [
     "get_console",
     # Banner
     "print_banner",
-    "MIND_FLAYER_FULL",
-    "MIND_FLAYER_COMPACT",
+    "get_banner_text",
+    "ZOYD_BANNER",
     # Task tree
     "render_task_tree",
     # Panels

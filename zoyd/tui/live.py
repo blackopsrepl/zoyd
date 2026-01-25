@@ -18,6 +18,7 @@ from rich.live import Live
 from rich.panel import Panel
 from rich.text import Text
 
+from zoyd.tui.banner import ZOYD_BANNER
 from zoyd.tui.panels import create_status_bar
 from zoyd.tui.spinners import MindFlayerSpinner
 from zoyd.tui.theme import COLORS
@@ -177,10 +178,27 @@ class LiveDisplay:
         self.log(f"[warning]{message}", style="warning")
 
     def _render_banner(self) -> RenderableType:
-        """Render the banner/status bar area.
+        """Render the ZOYD ASCII art banner with mind flayer art.
 
         Returns:
-            Rich renderable for the banner.
+            Rich renderable for the banner panel.
+        """
+        # Build the banner text with psionic purple styling
+        banner_text = Text()
+        for line in ZOYD_BANNER.strip().split("\n"):
+            banner_text.append(line + "\n", style=f"bold {COLORS['psionic']}")
+
+        return Panel(
+            banner_text,
+            border_style=COLORS["twilight"],
+            padding=(0, 2),
+        )
+
+    def _render_status(self) -> RenderableType:
+        """Render the status bar area.
+
+        Returns:
+            Rich renderable for the status bar.
         """
         bar = create_status_bar(
             prd=self.prd_path,
@@ -206,43 +224,77 @@ class LiveDisplay:
             return Text(f"Task: {self._task_text}", style="zoyd.task.active")
         return None
 
+    def _get_log_height(self) -> int:
+        """Calculate the available height for the log panel.
+
+        Uses the terminal height minus the banner height (approximately 24 lines
+        for the banner + status + task line + padding).
+
+        Returns:
+            Number of lines available for the log panel.
+        """
+        # Get terminal height, default to 40 if unavailable
+        terminal_height = self.console.height or 40
+
+        # Banner is approximately 22 lines, plus status bar (2), task line (2),
+        # panel borders and padding (4). Reserve ~30 lines for non-log content.
+        banner_overhead = 30
+
+        # Calculate available height for logs (minimum 5 lines)
+        available = max(5, terminal_height - banner_overhead)
+        return available
+
     def _render_logs(self) -> RenderableType:
-        """Render the scrolling log area.
+        """Render the scrolling log area with dynamic height.
+
+        The log panel fills the remaining terminal height after the banner
+        and status areas.
 
         Returns:
             Rich renderable for the logs.
         """
-        if not self._log_lines:
-            return Text("Waiting for activity...", style="dim")
+        log_height = self._get_log_height()
 
-        # Join log lines with newlines
-        content = Text()
-        for i, line in enumerate(self._log_lines):
-            if i > 0:
-                content.append("\n")
-            content.append(line)
+        if not self._log_lines:
+            content = Text("Waiting for activity...", style="dim")
+        else:
+            # Get the most recent log lines that fit in the available height
+            visible_lines = list(self._log_lines)[-log_height:]
+
+            # Join log lines with newlines
+            content = Text()
+            for i, line in enumerate(visible_lines):
+                if i > 0:
+                    content.append("\n")
+                content.append(line)
 
         return Panel(
             content,
             title="[panel.title]Log[/]",
             border_style=COLORS["twilight"],
             padding=(0, 1),
+            height=log_height + 2,  # Add 2 for panel borders
         )
 
     def _render(self) -> RenderableType:
         """Render the complete display.
 
+        Layout (top to bottom):
+        1. ASCII art banner (ZOYD logo + mind flayer)
+        2. Status bar (PRD, iteration, model, cost)
+        3. Current task line (optional, with spinner)
+        4. Scrolling log panel (fills remaining terminal height)
+
         Returns:
             Rich renderable for the entire display.
         """
         components = [self._render_banner()]
+        components.append(self._render_status())
 
         task_line = self._render_task_line()
         if task_line:
-            components.append(Text())  # Spacer
             components.append(task_line)
 
-        components.append(Text())  # Spacer
         components.append(self._render_logs())
 
         return Group(*components)
