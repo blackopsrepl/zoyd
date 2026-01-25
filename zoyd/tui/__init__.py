@@ -20,20 +20,13 @@ from zoyd.tui.banner import print_banner, MIND_FLAYER_FULL, MIND_FLAYER_COMPACT
 # Re-export task tree visualization
 from zoyd.tui.task_tree import render_task_tree
 
-# Re-export panel components
-from zoyd.tui.panels import StatusBar, OutputPanel, ErrorPanel
-
-# Re-export status rendering
-from zoyd.tui.status import render_status
-
-# Re-export progress components
-from zoyd.tui.progress import ProgressPanel, CostGauge
-
-# Re-export event system
-from zoyd.tui.events import EventType, EventEmitter
-
-# Re-export dashboard
-from zoyd.tui.dashboard import Dashboard
+# Future modules - imported when they exist
+# These will be uncommented as each module is implemented:
+# from zoyd.tui.panels import StatusBar, OutputPanel, ErrorPanel
+# from zoyd.tui.status import render_status
+# from zoyd.tui.progress import ProgressPanel, CostGauge
+# from zoyd.tui.events import EventType, EventEmitter
+# from zoyd.tui.dashboard import Dashboard
 
 __all__ = [
     # Theme
@@ -48,18 +41,14 @@ __all__ = [
     "MIND_FLAYER_COMPACT",
     # Task tree
     "render_task_tree",
-    # Panels
-    "StatusBar",
-    "OutputPanel",
-    "ErrorPanel",
-    # Status
-    "render_status",
-    # Progress
-    "ProgressPanel",
-    "CostGauge",
-    # Events
-    "EventType",
-    "EventEmitter",
-    # Dashboard
-    "Dashboard",
+    # Future exports (uncomment when modules are implemented):
+    # "StatusBar",
+    # "OutputPanel",
+    # "ErrorPanel",
+    # "render_status",
+    # "ProgressPanel",
+    # "CostGauge",
+    # "EventType",
+    # "EventEmitter",
+    # "Dashboard",
 ]

@@ -36,12 +36,12 @@ class TestGetConsole:
 
     def test_console_has_zoyd_theme(self):
         from zoyd.tui.console import get_console, reset_console
-        from zoyd.tui.theme import ZOYD_THEME
 
         reset_console()
         console = get_console()
-        # Check that some zoyd-specific styles are present
-        assert "zoyd.banner" in console._theme.styles
+        # Check that some zoyd-specific styles are present by getting the style
+        style = console.get_style("zoyd.banner")
+        assert style is not None
 
     def test_custom_file_output(self):
         from zoyd.tui.console import get_console, reset_console
@@ -70,18 +70,19 @@ class TestGetConsole:
 
 class TestResetConsole:
     def test_reset_clears_singleton(self):
-        from zoyd.tui.console import _console, get_console, reset_console
+        from zoyd.tui.console import get_console, reset_console
 
         # First get a console
-        get_console()
+        console1 = get_console()
 
         # Then reset
         reset_console()
 
-        # Import fresh to check module-level variable
-        import zoyd.tui.console as console_module
+        # Getting console again should create a new instance
+        console2 = get_console()
 
-        assert console_module._console is None
+        # They should be different instances
+        assert console1 is not console2
 
     def test_reset_allows_new_options(self):
         from zoyd.tui.console import get_console, reset_console
@@ -115,7 +116,9 @@ class TestCreateConsole:
         from zoyd.tui.console import create_console
 
         console = create_console()
-        assert "zoyd.banner" in console._theme.styles
+        # Check that zoyd-specific styles are present by getting the style
+        style = console.get_style("zoyd.banner")
+        assert style is not None
 
     def test_custom_file_output(self):
         from zoyd.tui.console import create_console
@@ -152,7 +155,9 @@ class TestModuleLevelConsole:
     def test_console_has_theme(self):
         from zoyd.tui.console import console
 
-        assert "zoyd.banner" in console._theme.styles
+        # Check that zoyd-specific styles are present by getting the style
+        style = console.get_style("zoyd.banner")
+        assert style is not None
 
 
 class TestConsoleOutput:

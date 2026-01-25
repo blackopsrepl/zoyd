@@ -75,40 +75,40 @@ STYLES = {
 ZOYD_THEME = Theme(
     {
         # Override Rich defaults with our palette
-        "default": STYLES["text"].color or "",
-        "dim": "dim " + (STYLES["text.dim"].color or ""),
-        "bold": "bold " + (STYLES["text.bright"].color or ""),
+        "default": COLORS["mist"],
+        "dim": f"dim {COLORS['orchid']}",
+        "bold": f"bold {COLORS['lavender']}",
         # Standard semantic styles
-        "info": STYLES["status.info"].color or "",
-        "warning": STYLES["status.warning"].color or "",
-        "error": "bold " + (STYLES["status.error"].color or ""),
-        "success": STYLES["status.success"].color or "",
+        "info": COLORS["info"],
+        "warning": COLORS["warning"],
+        "error": f"bold {COLORS['error']}",
+        "success": COLORS["success"],
         # Panel styles
-        "panel.border": STYLES["border"].color or "",
-        "panel.title": "bold " + (STYLES["panel.title"].color or ""),
+        "panel.border": COLORS["twilight"],
+        "panel.title": f"bold {COLORS['lavender']}",
         # Tree styles for task visualization
-        "tree": STYLES["border"].color or "",
-        "tree.line": STYLES["border"].color or "",
+        "tree": COLORS["twilight"],
+        "tree.line": COLORS["twilight"],
         # Progress bar styles
         "bar.back": COLORS["shadow"],
         "bar.complete": COLORS["psionic"],
         "bar.finished": COLORS["success"],
         "bar.pulse": COLORS["tentacle"],
         # Markdown styles
-        "markdown.h1": "bold " + COLORS["psionic"],
-        "markdown.h2": "bold " + COLORS["tentacle"],
-        "markdown.h3": "bold " + COLORS["amethyst"],
+        "markdown.h1": f"bold {COLORS['psionic']}",
+        "markdown.h2": f"bold {COLORS['tentacle']}",
+        "markdown.h3": f"bold {COLORS['amethyst']}",
         "markdown.code": COLORS["lavender"],
         "markdown.code_block": COLORS["mist"],
-        "markdown.link": "underline " + COLORS["orchid"],
+        "markdown.link": f"underline {COLORS['orchid']}",
         # Table styles
-        "table.header": "bold " + COLORS["lavender"],
+        "table.header": f"bold {COLORS['lavender']}",
         "table.border": COLORS["twilight"],
         # Custom zoyd styles
-        "zoyd.banner": "bold " + COLORS["psionic"],
+        "zoyd.banner": f"bold {COLORS['psionic']}",
         "zoyd.iteration": COLORS["tentacle"],
         "zoyd.task.pending": COLORS["pending"],
-        "zoyd.task.active": "bold " + COLORS["active"],
+        "zoyd.task.active": f"bold {COLORS['active']}",
         "zoyd.task.complete": COLORS["complete"],
         "zoyd.task.blocked": COLORS["blocked"],
         "zoyd.cost.low": COLORS["success"],
