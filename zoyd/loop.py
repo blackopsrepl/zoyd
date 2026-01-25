@@ -422,8 +422,10 @@ class LoopRunner:
         self.stats_tasks_completed_start = completed
         self.stats_total_tasks = total
 
+        # Set iteration before entering live context so banner shows correct value
+        self.live.iteration = iteration
+
         with self.live:
-            self.live.iteration = iteration
             if self.verbose:
                 self.live.log(f"[zoyd] Starting at iteration {iteration}", style="dim")
 

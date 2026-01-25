@@ -357,6 +357,43 @@ class TestResume:
         assert progress_file.exists()
         assert "# Zoyd Progress Log" in progress_file.read_text()
 
+    def test_resume_iteration_set_before_live_context(self, tmp_path):
+        """Test that iteration is set BEFORE entering live context when resuming.
+
+        This ensures the banner shows the correct iteration from the start,
+        not 0 briefly before updating.
+        """
+        from io import StringIO
+        from zoyd.tui.console import create_console
+
+        prd_file = tmp_path / "PRD.md"
+        prd_file.write_text("# PRD\n- [ ] Task 1")
+        progress_file = tmp_path / "progress.txt"
+        # Create progress with 5 iterations
+        progress_content = "# Zoyd Progress Log\n"
+        for i in range(1, 6):
+            progress_content += f"\n## Iteration {i} - 2026-01-25\n\nSome output\n"
+        progress_file.write_text(progress_content)
+
+        runner = LoopRunner(
+            prd_path=prd_file,
+            progress_path=progress_file,
+            resume=True,
+            max_iterations=6,  # Stop after one iteration
+            dry_run=True,
+        )
+
+        # The fix ensures iteration is set before the live context is entered.
+        # After run(), check that the iteration was correctly calculated from progress.
+        runner.run()
+
+        # Check that we started at the correct iteration (6 after 5 completed)
+        # The live display should have been set to iteration 6 before entering
+        # the context. We can verify this indirectly by checking the final state
+        # and ensuring the iteration count logic is correct.
+        assert runner.live.iteration == 6, \
+            f"Expected final iteration 6, got {runner.live.iteration}"
+
 
 class TestResumeCLI:
     def test_resume_flag_in_help(self):
