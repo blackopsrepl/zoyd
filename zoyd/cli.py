@@ -11,6 +11,10 @@ from .config import load_config
 from .loop import LoopRunner
 from .tui.console import create_console
 from .tui.status import print_status
+from .tui.traceback import ensure_traceback_installed
+
+# Install Rich traceback handler for better exception display
+ensure_traceback_installed()
 
 
 @click.group()

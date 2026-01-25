@@ -77,6 +77,14 @@ from zoyd.tui.events import (
 # Dashboard components
 from zoyd.tui.dashboard import Dashboard, DashboardState, create_dashboard
 
+# Traceback handler
+from zoyd.tui.traceback import (
+    install_traceback_handler,
+    ensure_traceback_installed,
+    is_traceback_installed,
+    reset_traceback_installed,
+)
+
 __all__ = [
     # Theme
     "ZOYD_THEME",
@@ -137,4 +145,9 @@ __all__ = [
     "Dashboard",
     "DashboardState",
     "create_dashboard",
+    # Traceback handler
+    "install_traceback_handler",
+    "ensure_traceback_installed",
+    "is_traceback_installed",
+    "reset_traceback_installed",
 ]
