@@ -245,20 +245,20 @@ I made the following changes:
 class TestLogMarkdownIntegration:
     """Integration tests for log_markdown in loop context."""
 
-    def test_log_markdown_used_for_claude_output(self) -> None:
-        """Verify log_markdown is called for Claude output in verbose mode."""
+    def test_log_lines_used_for_claude_output(self) -> None:
+        """Verify log_lines is called for Claude output (always, not gated by verbose)."""
         # This test verifies the integration by checking the loop.py code
-        # is using log_markdown() instead of log() for Claude output
+        # is using log_lines() for Claude output display
         import zoyd.loop as loop_module
 
-        # Read the source code to verify log_markdown is used
+        # Read the source code to verify log_lines is used
         import inspect
         source = inspect.getsource(loop_module.LoopRunner.run)
 
-        # Check that log_markdown is used for verbose output
-        assert "log_markdown(output)" in source
-        # Should not use log(output) for verbose Claude output anymore
-        # (except for dry run prompt which is not Claude's response)
+        # Check that log_lines is used for Claude output (both success and error branches)
+        assert "log_lines(output)" in source
+        # Should not use log_markdown(output) anymore - replaced with log_lines
+        assert "log_markdown(output)" not in source
 
 
 class TestLogMarkdownSyntaxHighlighting:
