@@ -200,24 +200,6 @@ def run(
     tui_refresh_rate = config.tui_refresh_rate
     tui_compact = config.tui_compact
 
-    # Apply session logging config defaults
-    if session_log is None:
-        session_log = config.session_logging
-    if sessions_dir is None:
-        sessions_dir = Path(config.sessions_dir)
-
-    # Apply Redis storage config defaults
-    if storage_backend is None:
-        storage_backend = config.storage_backend
-    if redis_host is None:
-        redis_host = config.redis_host
-    if redis_port is None:
-        redis_port = config.redis_port
-    if redis_db is None:
-        redis_db = config.redis_db
-    if redis_password is None:
-        redis_password = config.redis_password
-
     # Handle resume mode validation
     if resume and not progress_path.exists():
         click.echo(f"Error: Cannot resume - progress file '{progress_path}' does not exist", err=True)
@@ -239,7 +221,7 @@ def run(
         tui_refresh_rate=tui_refresh_rate,
         tui_compact=tui_compact,
         session_logging=session_log,
-        sessions_dir=str(sessions_dir),
+        sessions_dir=str(sessions_dir) if sessions_dir is not None else None,
         storage_backend=storage_backend,
         redis_host=redis_host,
         redis_port=redis_port,

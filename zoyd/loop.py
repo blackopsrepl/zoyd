@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 
 from . import prd, progress
+from .config import load_config
 from .session.logger import SessionLogger
 from .session.storage import create_storage
 from .tui.console import create_console
@@ -306,49 +307,52 @@ class LoopRunner:
         self,
         prd_path: Path,
         progress_path: Path,
-        max_iterations: int = 10,
+        max_iterations: int | None = None,
         model: str | None = None,
         dry_run: bool = False,
-        verbose: bool = False,
-        delay: float = 1.0,
-        auto_commit: bool = True,
+        verbose: bool | None = None,
+        delay: float | None = None,
+        auto_commit: bool | None = None,
         resume: bool = False,
-        fail_fast: bool = False,
+        fail_fast: bool | None = None,
         max_cost: float | None = None,
-        tui_enabled: bool = True,
-        tui_refresh_rate: float = 4.0,
-        tui_compact: bool = False,
-        session_logging: bool = True,
-        sessions_dir: str = ".zoyd/sessions",
-        storage_backend: str = "redis",
-        redis_host: str = "localhost",
-        redis_port: int = 6379,
-        redis_db: int = 0,
+        tui_enabled: bool | None = None,
+        tui_refresh_rate: float | None = None,
+        tui_compact: bool | None = None,
+        session_logging: bool | None = None,
+        sessions_dir: str | None = None,
+        storage_backend: str | None = None,
+        redis_host: str | None = None,
+        redis_port: int | None = None,
+        redis_db: int | None = None,
         redis_password: str | None = None,
     ):
+        # Load config for resolving None sentinels
+        cfg = load_config()
+
         self.prd_path = prd_path.resolve()
         self.progress_path = progress_path.resolve()
-        self.max_iterations = max_iterations
-        self.model = model
+        self.max_iterations = max_iterations if max_iterations is not None else cfg.max_iterations
+        self.model = model if model is not None else cfg.model
         self.dry_run = dry_run
-        self.verbose = verbose
-        self.delay = delay
-        self.auto_commit = auto_commit
+        self.verbose = verbose if verbose is not None else cfg.verbose
+        self.delay = delay if delay is not None else cfg.delay
+        self.auto_commit = auto_commit if auto_commit is not None else cfg.auto_commit
         self.resume = resume
-        self.fail_fast = fail_fast
-        self.max_cost = max_cost
-        self.tui_enabled = tui_enabled
-        self.tui_refresh_rate = tui_refresh_rate
-        self.tui_compact = tui_compact
-        self.session_logging = session_logging
-        self.sessions_dir = sessions_dir
-        self.storage_backend = storage_backend
-        self.redis_host = redis_host
-        self.redis_port = redis_port
-        self.redis_db = redis_db
-        self.redis_password = redis_password
+        self.fail_fast = fail_fast if fail_fast is not None else cfg.fail_fast
+        self.max_cost = max_cost if max_cost is not None else cfg.max_cost
+        self.tui_enabled = tui_enabled if tui_enabled is not None else cfg.tui_enabled
+        self.tui_refresh_rate = tui_refresh_rate if tui_refresh_rate is not None else cfg.tui_refresh_rate
+        self.tui_compact = tui_compact if tui_compact is not None else cfg.tui_compact
+        self.session_logging = session_logging if session_logging is not None else cfg.session_logging
+        self.sessions_dir = sessions_dir if sessions_dir is not None else cfg.sessions_dir
+        self.storage_backend = storage_backend if storage_backend is not None else cfg.storage_backend
+        self.redis_host = redis_host if redis_host is not None else cfg.redis_host
+        self.redis_port = redis_port if redis_port is not None else cfg.redis_port
+        self.redis_db = redis_db if redis_db is not None else cfg.redis_db
+        self.redis_password = redis_password if redis_password is not None else cfg.redis_password
         # Create display for output (TUI or plain depending on settings)
-        if not tui_enabled:
+        if not self.tui_enabled:
             self.live: LiveDisplay | PlainDisplay = create_plain_display(
                 prd_path=str(self.prd_path),
                 progress_path=str(self.progress_path),
@@ -364,7 +368,7 @@ class LoopRunner:
                 max_iterations=self.max_iterations,
                 model=self.model,
                 max_cost=self.max_cost,
-                refresh_per_second=int(tui_refresh_rate),
+                refresh_per_second=int(self.tui_refresh_rate),
             )
         self.consecutive_failures = 0
         self.max_consecutive_failures = 3

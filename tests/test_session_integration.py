@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from zoyd.config import ZoydConfig
 from zoyd.loop import LoopRunner
 from zoyd.session.storage import FileStorage, InMemoryStorage
 
@@ -43,15 +44,17 @@ def sessions_dir(tmp_path):
 class TestLoopRunnerSessionLogging:
     """Tests for LoopRunner with session logging enabled."""
 
-    def test_session_logging_disabled_by_default(self, prd_file, progress_file):
-        """Test session_logging is disabled by default."""
-        runner = LoopRunner(
-            prd_path=prd_file,
-            progress_path=progress_file,
-            tui_enabled=False,
-        )
-        assert runner.session_logging is False
-        assert runner.session_logger is None
+    def test_session_logging_enabled_by_default(self, prd_file, progress_file, sessions_dir):
+        """Test session_logging is enabled by default (config default is True)."""
+        with patch("zoyd.loop.load_config", return_value=ZoydConfig()):
+            runner = LoopRunner(
+                prd_path=prd_file,
+                progress_path=progress_file,
+                sessions_dir=sessions_dir,
+                tui_enabled=False,
+            )
+        assert runner.session_logging is True
+        assert runner.session_logger is not None
 
     def test_session_logging_enabled_creates_logger(
         self, prd_file, progress_file, sessions_dir

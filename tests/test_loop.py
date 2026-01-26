@@ -602,7 +602,7 @@ class TestFailFast:
         prd_file.write_text("# PRD\n- [ ] Task 1")
         progress_file = tmp_path / "progress.txt"
 
-        runner = LoopRunner(prd_path=prd_file, progress_path=progress_file)
+        runner = LoopRunner(prd_path=prd_file, progress_path=progress_file, session_logging=False)
         assert runner.fail_fast is False
 
     def test_fail_fast_can_be_enabled(self, tmp_path):
@@ -615,6 +615,7 @@ class TestFailFast:
             prd_path=prd_file,
             progress_path=progress_file,
             fail_fast=True,
+            session_logging=False,
         )
         assert runner.fail_fast is True
 
@@ -632,6 +633,7 @@ class TestFailFast:
             progress_path=progress_file,
             fail_fast=True,
             max_iterations=10,
+            session_logging=False,
         )
         exit_code = runner.run()
 
@@ -654,6 +656,7 @@ class TestFailFast:
             fail_fast=False,
             max_iterations=10,
             delay=0,  # No delay for testing
+            session_logging=False,
         )
         # Patch time.sleep to avoid waiting
         with patch("zoyd.loop.time.sleep"):
