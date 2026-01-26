@@ -127,28 +127,31 @@ class VectorMemory:
         Returns:
             The element ID if stored successfully, or ``None`` on failure.
         """
-        element_id = f"output:{session_id}:{iteration}:{uuid.uuid4().hex[:8]}"
-        vector = self.provider.embed(output)
+        try:
+            element_id = f"output:{session_id}:{iteration}:{uuid.uuid4().hex[:8]}"
+            vector = self.provider.embed(output)
 
-        # VADD key FP32 element_id V1 V2 ... Vn
-        self.client.execute_command(
-            "VADD", OUTPUTS_KEY, "FP32", element_id, *vector,
-        )
+            # VADD key FP32 element_id V1 V2 ... Vn
+            self.client.execute_command(
+                "VADD", OUTPUTS_KEY, "FP32", element_id, *vector,
+            )
 
-        # Store metadata as JSON at a separate key
-        metadata = {
-            "session_id": session_id,
-            "iteration": iteration,
-            "task_text": task_text,
-            "output_preview": output[:500],
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "return_code": return_code,
-        }
-        self.client.set(
-            f"{META_PREFIX}{element_id}", json.dumps(metadata),
-        )
+            # Store metadata as JSON at a separate key
+            metadata = {
+                "session_id": session_id,
+                "iteration": iteration,
+                "task_text": task_text,
+                "output_preview": output[:500],
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "return_code": return_code,
+            }
+            self.client.set(
+                f"{META_PREFIX}{element_id}", json.dumps(metadata),
+            )
 
-        return element_id
+            return element_id
+        except Exception:
+            return None
 
     def store_error(
         self,
@@ -172,27 +175,30 @@ class VectorMemory:
         Returns:
             The element ID if stored successfully, or ``None`` on failure.
         """
-        element_id = f"error:{session_id}:{iteration}:{uuid.uuid4().hex[:8]}"
-        vector = self.provider.embed(output)
+        try:
+            element_id = f"error:{session_id}:{iteration}:{uuid.uuid4().hex[:8]}"
+            vector = self.provider.embed(output)
 
-        # VADD key FP32 element_id V1 V2 ... Vn
-        self.client.execute_command(
-            "VADD", ERRORS_KEY, "FP32", element_id, *vector,
-        )
+            # VADD key FP32 element_id V1 V2 ... Vn
+            self.client.execute_command(
+                "VADD", ERRORS_KEY, "FP32", element_id, *vector,
+            )
 
-        # Store metadata as JSON at a separate key
-        metadata = {
-            "session_id": session_id,
-            "iteration": iteration,
-            "task_text": task_text,
-            "error_preview": output[:500],
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-        self.client.set(
-            f"{META_PREFIX}{element_id}", json.dumps(metadata),
-        )
+            # Store metadata as JSON at a separate key
+            metadata = {
+                "session_id": session_id,
+                "iteration": iteration,
+                "task_text": task_text,
+                "error_preview": output[:500],
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+            self.client.set(
+                f"{META_PREFIX}{element_id}", json.dumps(metadata),
+            )
 
-        return element_id
+            return element_id
+        except Exception:
+            return None
 
     def find_relevant_outputs(
         self,
@@ -215,40 +221,43 @@ class VectorMemory:
             (``session_id``, ``iteration``, ``task_text``, ``output_preview``,
             ``timestamp``, ``return_code``).  Empty list on failure.
         """
-        vector = self.provider.embed(query_text)
+        try:
+            vector = self.provider.embed(query_text)
 
-        # Request extra results when excluding a session to ensure we
-        # still return up to ``count`` after filtering.
-        fetch_count = count + 10 if exclude_session else count
+            # Request extra results when excluding a session to ensure we
+            # still return up to ``count`` after filtering.
+            fetch_count = count + 10 if exclude_session else count
 
-        # VSIM key FP32 count V1 V2 ... Vn  WITHSCORES
-        raw = self.client.execute_command(
-            "VSIM", OUTPUTS_KEY, "FP32", fetch_count, *vector, "WITHSCORES",
-        )
+            # VSIM key FP32 count V1 V2 ... Vn  WITHSCORES
+            raw = self.client.execute_command(
+                "VSIM", OUTPUTS_KEY, "FP32", fetch_count, *vector, "WITHSCORES",
+            )
 
-        # ``raw`` is a flat list: [element_id, score, element_id, score, ...]
-        results: list[dict[str, Any]] = []
-        if not raw:
+            # ``raw`` is a flat list: [element_id, score, element_id, score, ...]
+            results: list[dict[str, Any]] = []
+            if not raw:
+                return results
+
+            for i in range(0, len(raw), 2):
+                element_id = raw[i]
+                score = float(raw[i + 1])
+
+                meta_raw = self.client.get(f"{META_PREFIX}{element_id}")
+                if meta_raw is None:
+                    continue
+                meta = json.loads(meta_raw)
+
+                if exclude_session and meta.get("session_id") == exclude_session:
+                    continue
+
+                results.append({"element_id": element_id, "score": score, **meta})
+
+                if len(results) >= count:
+                    break
+
             return results
-
-        for i in range(0, len(raw), 2):
-            element_id = raw[i]
-            score = float(raw[i + 1])
-
-            meta_raw = self.client.get(f"{META_PREFIX}{element_id}")
-            if meta_raw is None:
-                continue
-            meta = json.loads(meta_raw)
-
-            if exclude_session and meta.get("session_id") == exclude_session:
-                continue
-
-            results.append({"element_id": element_id, "score": score, **meta})
-
-            if len(results) >= count:
-                break
-
-        return results
+        except Exception:
+            return []
 
     def find_similar_tasks(
         self,
@@ -271,40 +280,43 @@ class VectorMemory:
             (``session_id``, ``task_text``, ``line_number``, ``timestamp``).
             Empty list on failure.
         """
-        vector = self.provider.embed(task_text)
+        try:
+            vector = self.provider.embed(task_text)
 
-        # Request extra results when excluding a session to ensure we
-        # still return up to ``count`` after filtering.
-        fetch_count = count + 10 if exclude_session else count
+            # Request extra results when excluding a session to ensure we
+            # still return up to ``count`` after filtering.
+            fetch_count = count + 10 if exclude_session else count
 
-        # VSIM key FP32 count V1 V2 ... Vn  WITHSCORES
-        raw = self.client.execute_command(
-            "VSIM", TASKS_KEY, "FP32", fetch_count, *vector, "WITHSCORES",
-        )
+            # VSIM key FP32 count V1 V2 ... Vn  WITHSCORES
+            raw = self.client.execute_command(
+                "VSIM", TASKS_KEY, "FP32", fetch_count, *vector, "WITHSCORES",
+            )
 
-        # ``raw`` is a flat list: [element_id, score, element_id, score, ...]
-        results: list[dict[str, Any]] = []
-        if not raw:
+            # ``raw`` is a flat list: [element_id, score, element_id, score, ...]
+            results: list[dict[str, Any]] = []
+            if not raw:
+                return results
+
+            for i in range(0, len(raw), 2):
+                element_id = raw[i]
+                score = float(raw[i + 1])
+
+                meta_raw = self.client.get(f"{META_PREFIX}{element_id}")
+                if meta_raw is None:
+                    continue
+                meta = json.loads(meta_raw)
+
+                if exclude_session and meta.get("session_id") == exclude_session:
+                    continue
+
+                results.append({"element_id": element_id, "score": score, **meta})
+
+                if len(results) >= count:
+                    break
+
             return results
-
-        for i in range(0, len(raw), 2):
-            element_id = raw[i]
-            score = float(raw[i + 1])
-
-            meta_raw = self.client.get(f"{META_PREFIX}{element_id}")
-            if meta_raw is None:
-                continue
-            meta = json.loads(meta_raw)
-
-            if exclude_session and meta.get("session_id") == exclude_session:
-                continue
-
-            results.append({"element_id": element_id, "score": score, **meta})
-
-            if len(results) >= count:
-                break
-
-        return results
+        except Exception:
+            return []
 
     def find_similar_errors(
         self,
@@ -325,33 +337,36 @@ class VectorMemory:
             (``session_id``, ``iteration``, ``task_text``, ``error_preview``,
             ``timestamp``).  Empty list on failure.
         """
-        vector = self.provider.embed(error_text)
+        try:
+            vector = self.provider.embed(error_text)
 
-        # VSIM key FP32 count V1 V2 ... Vn  WITHSCORES
-        raw = self.client.execute_command(
-            "VSIM", ERRORS_KEY, "FP32", count, *vector, "WITHSCORES",
-        )
+            # VSIM key FP32 count V1 V2 ... Vn  WITHSCORES
+            raw = self.client.execute_command(
+                "VSIM", ERRORS_KEY, "FP32", count, *vector, "WITHSCORES",
+            )
 
-        # ``raw`` is a flat list: [element_id, score, element_id, score, ...]
-        results: list[dict[str, Any]] = []
-        if not raw:
+            # ``raw`` is a flat list: [element_id, score, element_id, score, ...]
+            results: list[dict[str, Any]] = []
+            if not raw:
+                return results
+
+            for i in range(0, len(raw), 2):
+                element_id = raw[i]
+                score = float(raw[i + 1])
+
+                meta_raw = self.client.get(f"{META_PREFIX}{element_id}")
+                if meta_raw is None:
+                    continue
+                meta = json.loads(meta_raw)
+
+                results.append({"element_id": element_id, "score": score, **meta})
+
+                if len(results) >= count:
+                    break
+
             return results
-
-        for i in range(0, len(raw), 2):
-            element_id = raw[i]
-            score = float(raw[i + 1])
-
-            meta_raw = self.client.get(f"{META_PREFIX}{element_id}")
-            if meta_raw is None:
-                continue
-            meta = json.loads(meta_raw)
-
-            results.append({"element_id": element_id, "score": score, **meta})
-
-            if len(results) >= count:
-                break
-
-        return results
+        except Exception:
+            return []
 
     def remove_session(self, session_id: str) -> int:
         """Remove all vector elements and metadata for a session.
@@ -367,44 +382,47 @@ class VectorMemory:
         Returns:
             The total number of elements removed across all vector sets.
         """
-        removed = 0
+        try:
+            removed = 0
 
-        # Each tuple: (element_id_prefix, vector_set_key)
-        prefixes = [
-            (f"output:{session_id}:", OUTPUTS_KEY),
-            (f"task:{session_id}:", TASKS_KEY),
-            (f"error:{session_id}:", ERRORS_KEY),
-        ]
+            # Each tuple: (element_id_prefix, vector_set_key)
+            prefixes = [
+                (f"output:{session_id}:", OUTPUTS_KEY),
+                (f"task:{session_id}:", TASKS_KEY),
+                (f"error:{session_id}:", ERRORS_KEY),
+            ]
 
-        for prefix, vset_key in prefixes:
-            # Scan for metadata keys matching this prefix
-            meta_pattern = f"{META_PREFIX}{prefix}*"
-            meta_keys: list[str] = []
-            element_ids: list[str] = []
+            for prefix, vset_key in prefixes:
+                # Scan for metadata keys matching this prefix
+                meta_pattern = f"{META_PREFIX}{prefix}*"
+                meta_keys: list[str] = []
+                element_ids: list[str] = []
 
-            cursor = 0
-            while True:
-                cursor, keys = self.client.scan(
-                    cursor=cursor, match=meta_pattern, count=100,
-                )
-                for key in keys:
-                    meta_keys.append(key)
-                    # Extract element_id from key by stripping META_PREFIX
-                    element_id = key[len(META_PREFIX):]
-                    element_ids.append(element_id)
-                if cursor == 0:
-                    break
+                cursor = 0
+                while True:
+                    cursor, keys = self.client.scan(
+                        cursor=cursor, match=meta_pattern, count=100,
+                    )
+                    for key in keys:
+                        meta_keys.append(key)
+                        # Extract element_id from key by stripping META_PREFIX
+                        element_id = key[len(META_PREFIX):]
+                        element_ids.append(element_id)
+                    if cursor == 0:
+                        break
 
-            # VREM each element from the vector set
-            for element_id in element_ids:
-                self.client.execute_command("VREM", vset_key, element_id)
-                removed += 1
+                # VREM each element from the vector set
+                for element_id in element_ids:
+                    self.client.execute_command("VREM", vset_key, element_id)
+                    removed += 1
 
-            # DEL all metadata keys in one batch
-            if meta_keys:
-                self.client.delete(*meta_keys)
+                # DEL all metadata keys in one batch
+                if meta_keys:
+                    self.client.delete(*meta_keys)
 
-        return removed
+            return removed
+        except Exception:
+            return 0
 
     def store_task(
         self,
@@ -426,23 +444,26 @@ class VectorMemory:
         Returns:
             The element ID if stored successfully, or ``None`` on failure.
         """
-        element_id = f"task:{session_id}:{line_number}:{uuid.uuid4().hex[:8]}"
-        vector = self.provider.embed(task_text)
+        try:
+            element_id = f"task:{session_id}:{line_number}:{uuid.uuid4().hex[:8]}"
+            vector = self.provider.embed(task_text)
 
-        # VADD key FP32 element_id V1 V2 ... Vn
-        self.client.execute_command(
-            "VADD", TASKS_KEY, "FP32", element_id, *vector,
-        )
+            # VADD key FP32 element_id V1 V2 ... Vn
+            self.client.execute_command(
+                "VADD", TASKS_KEY, "FP32", element_id, *vector,
+            )
 
-        # Store metadata as JSON at a separate key
-        metadata = {
-            "session_id": session_id,
-            "task_text": task_text,
-            "line_number": line_number,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-        self.client.set(
-            f"{META_PREFIX}{element_id}", json.dumps(metadata),
-        )
+            # Store metadata as JSON at a separate key
+            metadata = {
+                "session_id": session_id,
+                "task_text": task_text,
+                "line_number": line_number,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+            self.client.set(
+                f"{META_PREFIX}{element_id}", json.dumps(metadata),
+            )
 
-        return element_id
+            return element_id
+        except Exception:
+            return None
