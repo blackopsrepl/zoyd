@@ -83,6 +83,8 @@ class LiveDisplay:
         self._task_text: str | None = None
         self._spinner: MindFlayerSpinner | None = None
         self._log_lines: deque[RenderableType] = deque(maxlen=max_log_lines)
+        self._completed = 0
+        self._total = 0
 
         # Live display
         self._live: Live | None = None
@@ -119,6 +121,17 @@ class LiveDisplay:
             text: Task text, or None to clear.
         """
         self._task_text = text
+        self._refresh()
+
+    def set_completion(self, completed: int, total: int) -> None:
+        """Set the task completion counts.
+
+        Args:
+            completed: Number of completed tasks.
+            total: Total number of tasks.
+        """
+        self._completed = completed
+        self._total = total
         self._refresh()
 
     def start_spinner(self, text: str = "Invoking Claude...") -> None:

@@ -93,6 +93,37 @@ class TestLiveDisplayState:
         live.set_task(None)
         assert live._task_text is None
 
+    def test_initial_completed_is_zero(self) -> None:
+        """Initial completed count should be 0."""
+        console = Console(file=io.StringIO(), force_terminal=True)
+        live = LiveDisplay(console)
+        assert live._completed == 0
+
+    def test_initial_total_is_zero(self) -> None:
+        """Initial total count should be 0."""
+        console = Console(file=io.StringIO(), force_terminal=True)
+        live = LiveDisplay(console)
+        assert live._total == 0
+
+    def test_set_completion(self) -> None:
+        """set_completion should update _completed and _total."""
+        console = Console(file=io.StringIO(), force_terminal=True)
+        live = LiveDisplay(console)
+        live.set_completion(5, 10)
+        assert live._completed == 5
+        assert live._total == 10
+
+    def test_set_completion_updates_both_fields(self) -> None:
+        """set_completion should update both fields independently."""
+        console = Console(file=io.StringIO(), force_terminal=True)
+        live = LiveDisplay(console)
+        live.set_completion(3, 7)
+        assert live._completed == 3
+        assert live._total == 7
+        live.set_completion(7, 7)
+        assert live._completed == 7
+        assert live._total == 7
+
 
 class TestLiveDisplaySpinner:
     """Tests for LiveDisplay spinner integration."""

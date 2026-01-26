@@ -12,7 +12,7 @@ progress = "progress.txt"
 max_iterations = 150
 
 # Delay between iterations in seconds
-delay = 120.0
+delay = 30.0
 
 # Claude model to use (null uses default)
 # model = "claude-sonnet-4-20250514"
