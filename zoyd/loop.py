@@ -210,8 +210,9 @@ def invoke_claude(
     cwd: Path | None = None,
     track_cost: bool = False,
     append_system_prompt: str | None = None,
+    sandbox: bool = True,
 ) -> tuple[int, str, float | None]:
-    """Invoke Claude Code with the given prompt in sandbox mode.
+    """Invoke Claude Code with the given prompt.
 
     Args:
         prompt: The prompt to send to Claude.
@@ -219,6 +220,8 @@ def invoke_claude(
         cwd: Working directory for Claude.
         track_cost: If True, use JSON output format to track cost.
         append_system_prompt: Optional text appended to the system prompt.
+        sandbox: If True (default), enable filesystem/network sandbox isolation.
+            If False, disable sandbox mode (e.g. for commit message generation).
 
     Returns:
         Tuple of (return_code, output, cost_usd). cost_usd is None if not tracking or unavailable.
