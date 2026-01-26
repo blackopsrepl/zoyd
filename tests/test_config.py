@@ -242,7 +242,8 @@ class TestCLIConfigIntegration:
             Path("override.md").write_text("# Override PRD\n- [ ] Task\n")
 
             # Use --no-tui to get capturable output (screen=True uses alternate buffer)
-            result = runner.invoke(cli, ["run", "--dry-run", "--prd", "override.md", "-n", "7", "--no-tui"])
+            # Use --no-session-log to avoid Redis connection attempts
+            result = runner.invoke(cli, ["run", "--dry-run", "--prd", "override.md", "-n", "7", "--no-tui", "--no-session-log"])
             # Should use CLI values - verify by checking the PRD content in dry-run prompt
             assert "# Override PRD" in result.output
             # Max iterations 7 means it stops at iteration 7/7
