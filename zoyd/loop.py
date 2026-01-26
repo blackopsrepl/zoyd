@@ -151,6 +151,45 @@ def build_prompt(
     )
 
 
+def build_prompt_with_memory(
+    prd_content: str,
+    relevant_context: str,
+    recent_progress: str,
+    iteration: int,
+    completed: int,
+    total: int,
+    current_task: str,
+) -> str:
+    """Build a prompt using vector memory context instead of the full progress log.
+
+    Uses ``PROMPT_TEMPLATE_WITH_MEMORY`` which replaces the unbounded progress
+    log with two focused sections: semantically relevant past work retrieved
+    via vector search, and only the last N iterations of progress.
+
+    Args:
+        prd_content: Content of the PRD file.
+        relevant_context: Formatted string of semantically relevant past work
+            from vector search results.
+        recent_progress: The last N iterations extracted from the progress log.
+        iteration: Current iteration number.
+        completed: Number of completed tasks.
+        total: Total number of tasks.
+        current_task: Text of the current task to complete.
+
+    Returns:
+        Formatted prompt string.
+    """
+    return PROMPT_TEMPLATE_WITH_MEMORY.format(
+        iteration=iteration,
+        completed=completed,
+        total=total,
+        current_task=current_task,
+        relevant_context=relevant_context or "(No relevant context found)",
+        recent_progress=recent_progress or "(No progress yet)",
+        prd_content=prd_content,
+    )
+
+
 def generate_commit_message(iteration_output: str, task_text: str, model: str | None = None) -> str | None:
     """Generate a commit message using Claude.
 
