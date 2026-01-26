@@ -300,16 +300,34 @@ class LiveDisplay:
         and status areas. Uses Group to support mixed content types
         (Text, Markdown, etc.).
 
+        When ``_scroll_offset == 0`` (auto-scroll mode), the most recent
+        ``log_height`` entries are shown.  Otherwise the view is shifted
+        upward by ``_scroll_offset`` lines from the bottom.
+
+        A scroll indicator is shown in the panel subtitle when the user
+        has scrolled away from the bottom.
+
         Returns:
             Rich renderable for the logs.
         """
         log_height = self._get_log_height()
+        total = len(self._log_lines)
+        subtitle: str | None = None
 
         if not self._log_lines:
             content: RenderableType = Text("Waiting for activity...", style="dim")
         else:
-            # Get the most recent log lines that fit in the available height
-            visible_lines = list(self._log_lines)[-log_height:]
+            if self._scroll_offset == 0:
+                # Auto-scroll: show the last log_height entries
+                visible_lines = list(self._log_lines)[-log_height:]
+            else:
+                # Manual scroll: compute window from the offset
+                end = max(0, total - self._scroll_offset)
+                start = max(0, end - log_height)
+                visible_lines = list(self._log_lines)[start:end]
+
+                # Show scroll indicator
+                subtitle = f"[lines {start + 1}-{end} of {total}]"
 
             # Use Group for mixed content types (Text, Markdown, etc.)
             content = Group(*visible_lines)
@@ -317,6 +335,7 @@ class LiveDisplay:
         return Panel(
             content,
             title="[panel.title]Log[/]",
+            subtitle=subtitle,
             border_style=COLORS["twilight"],
             padding=(0, 1),
             height=log_height + 2,  # Add 2 for panel borders
