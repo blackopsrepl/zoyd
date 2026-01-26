@@ -117,6 +117,50 @@ class VectorMemory:
 
         return element_id
 
+    def store_error(
+        self,
+        session_id: str,
+        iteration: int,
+        output: str,
+        task_text: str,
+    ) -> str | None:
+        """Store an error output embedding and metadata.
+
+        Generates a unique element ID, embeds the error output text via the
+        provider, adds it to the errors vector set with ``VADD``, and
+        stores JSON metadata at ``zoyd:vectors:meta:{element_id}``.
+
+        Args:
+            session_id: The current session identifier.
+            iteration: Iteration number within the session.
+            output: Full Claude error output text for this iteration.
+            task_text: The task being worked on when the error occurred.
+
+        Returns:
+            The element ID if stored successfully, or ``None`` on failure.
+        """
+        element_id = f"error:{session_id}:{iteration}:{uuid.uuid4().hex[:8]}"
+        vector = self.provider.embed(output)
+
+        # VADD key FP32 element_id V1 V2 ... Vn
+        self.client.execute_command(
+            "VADD", ERRORS_KEY, "FP32", element_id, *vector,
+        )
+
+        # Store metadata as JSON at a separate key
+        metadata = {
+            "session_id": session_id,
+            "iteration": iteration,
+            "task_text": task_text,
+            "error_preview": output[:500],
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        self.client.set(
+            f"{META_PREFIX}{element_id}", json.dumps(metadata),
+        )
+
+        return element_id
+
     def store_task(
         self,
         session_id: str,
