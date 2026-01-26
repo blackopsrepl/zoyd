@@ -93,6 +93,18 @@ class TestLiveDisplayState:
         live.set_task(None)
         assert live._task_text is None
 
+    def test_initial_scroll_offset_is_zero(self) -> None:
+        """Initial scroll offset should be 0."""
+        console = Console(file=io.StringIO(), force_terminal=True)
+        live = LiveDisplay(console)
+        assert live._scroll_offset == 0
+
+    def test_initial_log_lines_is_list(self) -> None:
+        """Log lines should be an unbounded list, not a deque."""
+        console = Console(file=io.StringIO(), force_terminal=True)
+        live = LiveDisplay(console)
+        assert isinstance(live._log_lines, list)
+
     def test_initial_completed_is_zero(self) -> None:
         """Initial completed count should be 0."""
         console = Console(file=io.StringIO(), force_terminal=True)
@@ -233,18 +245,18 @@ class TestLiveDisplayLogging:
         assert len(live._log_lines) == 1
         assert "[warning]Be careful" in str(live._log_lines[0])
 
-    def test_max_log_lines_limit(self) -> None:
-        """Log lines should be limited by max_log_lines."""
+    def test_log_lines_unbounded(self) -> None:
+        """Log lines should be stored in an unbounded list."""
         console = Console(file=io.StringIO(), force_terminal=True)
         live = LiveDisplay(console, max_log_lines=3)
         live.log("Line 1")
         live.log("Line 2")
         live.log("Line 3")
         live.log("Line 4")
-        assert len(live._log_lines) == 3
-        # Oldest line should be removed
-        assert str(live._log_lines[0]) == "Line 2"
-        assert str(live._log_lines[2]) == "Line 4"
+        # All lines are kept (unbounded list, not deque)
+        assert len(live._log_lines) == 4
+        assert str(live._log_lines[0]) == "Line 1"
+        assert str(live._log_lines[3]) == "Line 4"
 
 
 class TestLiveDisplayRendering:

@@ -10,7 +10,6 @@ the display when the terminal size changes.
 from __future__ import annotations
 
 import signal
-from collections import deque
 from typing import TYPE_CHECKING, Any, Callable
 
 from rich.console import Group
@@ -82,7 +81,8 @@ class LiveDisplay:
         self._cost = 0.0
         self._task_text: str | None = None
         self._spinner: MindFlayerSpinner | None = None
-        self._log_lines: deque[RenderableType] = deque(maxlen=max_log_lines)
+        self._log_lines: list[RenderableType] = []
+        self._scroll_offset: int = 0
         self._completed = 0
         self._total = 0
 

@@ -116,17 +116,16 @@ def new_feature():
         for item in live._log_lines:
             assert isinstance(item, Markdown)
 
-    def test_log_markdown_respects_max_log_lines(self) -> None:
-        """log_markdown should respect max_log_lines limit."""
+    def test_log_markdown_unbounded(self) -> None:
+        """log_markdown entries are kept in unbounded list."""
         console = Console(file=io.StringIO(), force_terminal=True)
         live = LiveDisplay(console, max_log_lines=3)
         live.log_markdown("# One")
         live.log_markdown("# Two")
         live.log_markdown("# Three")
         live.log_markdown("# Four")
-        assert len(live._log_lines) == 3
-        # First item should have been removed
-        # Can't easily check content since Markdown doesn't have direct markup access
+        # All entries kept (unbounded list, not deque)
+        assert len(live._log_lines) == 4
 
     def test_log_markdown_mixed_with_regular_log(self) -> None:
         """log_markdown should work alongside regular log()."""
