@@ -533,6 +533,7 @@ class LoopRunner:
                     progress_content = progress.read_progress(self.progress_path)
                     tasks = prd.parse_tasks(prd_content)
                     completed, total = prd.get_completion_status(tasks)
+                    self.live.set_completion(completed, total)
 
                     # Update live display
                     self.live.iteration = iteration
