@@ -151,12 +151,18 @@ class LiveDisplay:
     def log(self, message: str, style: str | None = None) -> None:
         """Add a log message to the scrolling area.
 
+        If the user has scrolled up (offset > 0), the scroll offset is
+        incremented so the viewport stays on the same content.  If already
+        in auto-scroll mode (offset == 0), the view stays at the bottom.
+
         Args:
             message: The message to log.
             style: Optional Rich style for the message.
         """
         text = Text(message, style=style or "")
         self._log_lines.append(text)
+        if self._scroll_offset > 0:
+            self._scroll_offset += 1
         self._refresh()
 
     def log_iteration_start(self, iteration: int, completed: int, total: int) -> None:
@@ -201,16 +207,25 @@ class LiveDisplay:
         """Log content by splitting into individual lines.
 
         Each line is appended as a separate Text renderable to the log area.
+        If the user has scrolled up (offset > 0), the scroll offset is
+        incremented by the number of new lines so the viewport stays on
+        the same content.
 
         Args:
             content: Content string to split and log line by line.
         """
-        for line in content.split("\n"):
+        lines = content.split("\n")
+        for line in lines:
             self._log_lines.append(Text(line))
+        if self._scroll_offset > 0:
+            self._scroll_offset += len(lines)
         self._refresh()
 
     def log_markdown(self, content: str, *, code_theme: str | None = None) -> None:
         """Log markdown content with syntax highlighting for code blocks.
+
+        If the user has scrolled up (offset > 0), the scroll offset is
+        incremented so the viewport stays on the same content.
 
         Args:
             content: Markdown content to render.
@@ -219,6 +234,8 @@ class LiveDisplay:
         theme = code_theme or DEFAULT_CODE_THEME
         md = Markdown(content, code_theme=theme)
         self._log_lines.append(md)
+        if self._scroll_offset > 0:
+            self._scroll_offset += 1
         self._refresh()
 
     def _render_banner(self) -> RenderableType:
