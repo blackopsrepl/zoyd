@@ -252,9 +252,11 @@ class LiveDisplay:
             Rich renderable for the banner panel.
         """
         versioned = get_versioned_banner(__version__)
+        lines = versioned.strip().split("\n")
         banner_text = Text()
-        for line in versioned.strip().split("\n"):
-            banner_text.append(line + "\n", style=f"bold {COLORS['psionic']}")
+        for i, line in enumerate(lines):
+            suffix = "\n" if i < len(lines) - 1 else ""
+            banner_text.append(line + suffix, style=f"bold {COLORS['psionic']}")
 
         return Panel(
             banner_text,
