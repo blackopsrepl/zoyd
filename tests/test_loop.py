@@ -315,6 +315,17 @@ class TestAutoCommit:
         result = generate_commit_message("Made changes", "Add widget")
         assert result is None
 
+    @patch("zoyd.loop.invoke_claude")
+    def test_generate_commit_message_disables_sandbox(self, mock_invoke):
+        """Test that generate_commit_message() passes sandbox=False to invoke_claude."""
+        mock_invoke.return_value = (0, "Fix bug in parser", None)
+
+        generate_commit_message("Made changes to parser", "Fix parser bug")
+
+        mock_invoke.assert_called_once()
+        _, kwargs = mock_invoke.call_args
+        assert kwargs.get("sandbox") is False
+
 
 class TestResume:
     def test_resume_default_false(self, tmp_path):
