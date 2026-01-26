@@ -217,6 +217,62 @@ class VectorMemory:
 
         return results
 
+    def find_similar_tasks(
+        self,
+        task_text: str,
+        count: int = 5,
+        exclude_session: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Find tasks semantically similar to the given task text.
+
+        Embeds the task text, runs ``VSIM`` against the tasks vector set,
+        and retrieves metadata for each matching element.
+
+        Args:
+            task_text: Text to search for similar tasks.
+            count: Maximum number of results to return.
+            exclude_session: If provided, filter out results from this session.
+
+        Returns:
+            List of dicts with ``element_id``, ``score``, and metadata fields
+            (``session_id``, ``task_text``, ``line_number``, ``timestamp``).
+            Empty list on failure.
+        """
+        vector = self.provider.embed(task_text)
+
+        # Request extra results when excluding a session to ensure we
+        # still return up to ``count`` after filtering.
+        fetch_count = count + 10 if exclude_session else count
+
+        # VSIM key FP32 count V1 V2 ... Vn  WITHSCORES
+        raw = self.client.execute_command(
+            "VSIM", TASKS_KEY, "FP32", fetch_count, *vector, "WITHSCORES",
+        )
+
+        # ``raw`` is a flat list: [element_id, score, element_id, score, ...]
+        results: list[dict[str, Any]] = []
+        if not raw:
+            return results
+
+        for i in range(0, len(raw), 2):
+            element_id = raw[i]
+            score = float(raw[i + 1])
+
+            meta_raw = self.client.get(f"{META_PREFIX}{element_id}")
+            if meta_raw is None:
+                continue
+            meta = json.loads(meta_raw)
+
+            if exclude_session and meta.get("session_id") == exclude_session:
+                continue
+
+            results.append({"element_id": element_id, "score": score, **meta})
+
+            if len(results) >= count:
+                break
+
+        return results
+
     def store_task(
         self,
         session_id: str,
