@@ -591,6 +591,15 @@ class PlainDisplay:
         # The content is already human-readable markdown
         print(content)
 
+    def log_lines(self, content: str) -> None:
+        """Log content by printing each line individually.
+
+        Args:
+            content: Content string to split and print line by line.
+        """
+        for line in content.split("\n"):
+            print(line)
+
     def __enter__(self) -> "PlainDisplay":
         """Enter the display context.
 
