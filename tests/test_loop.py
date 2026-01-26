@@ -193,7 +193,7 @@ class TestBuildPrompt:
         assert "## Current Task (COMPLETE THIS ONLY)" in prompt
         assert "Task 1" in prompt
         assert "IMPORTANT: Work on ONLY this task" in prompt
-        assert "One task = one commit" in prompt
+        assert "Do NOT run any git commands" in prompt
 
     def test_build_prompt_empty_progress(self):
         """Test that empty progress shows placeholder."""
