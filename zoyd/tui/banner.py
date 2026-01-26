@@ -83,6 +83,34 @@ def print_banner(
     console.print(panel)
 
 
+def get_versioned_banner(version: str) -> str:
+    """Create a banner with version string after the second box.
+
+    Inserts ``v{version}`` on the line after the second box's closing
+    border (``└───...┘``), left-aligned under the boxes.
+
+    Args:
+        version: Version string, e.g. ``"0.3.1"``.
+
+    Returns:
+        The banner string with the version line inserted.
+    """
+    lines = ZOYD_BANNER.split("\n")
+    # The second box uses └───...┘ (the first box uses ╚═══...╝).
+    # Find the └ line and insert version after it.
+    insert_index = None
+    for i, line in enumerate(lines):
+        if "└" in line:
+            insert_index = i + 1
+            break
+    if insert_index is None:
+        # Fallback: append version at the end
+        return ZOYD_BANNER.rstrip("\n") + f"\n v{version}\n"
+    version_line = f" v{version}"
+    lines.insert(insert_index, version_line)
+    return "\n".join(lines)
+
+
 def get_banner_text() -> str:
     """Get the raw banner ASCII art as a string.
 

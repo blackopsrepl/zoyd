@@ -119,17 +119,74 @@ class TestPrintBanner:
         pass
 
 
+class TestGetVersionedBanner:
+    def test_returns_string(self):
+        from zoyd.tui.banner import get_versioned_banner
+
+        result = get_versioned_banner("1.2.3")
+        assert isinstance(result, str)
+
+    def test_contains_version_string(self):
+        from zoyd.tui.banner import get_versioned_banner
+
+        result = get_versioned_banner("1.2.3")
+        assert "v1.2.3" in result
+
+    def test_version_after_second_box(self):
+        from zoyd.tui.banner import get_versioned_banner
+
+        result = get_versioned_banner("0.5.0")
+        lines = result.split("\n")
+        # The second box uses └───...┘ (first box uses ╚═══...╝)
+        for i, line in enumerate(lines):
+            if "└" in line:
+                # The very next line should contain the version
+                assert "v0.5.0" in lines[i + 1]
+                return
+        pytest.fail("Could not find second box closing border (└)")
+
+    def test_version_left_aligned(self):
+        from zoyd.tui.banner import get_versioned_banner
+
+        result = get_versioned_banner("2.0.0")
+        lines = result.split("\n")
+        for line in lines:
+            if "v2.0.0" in line:
+                # Should be left-aligned with a single leading space (matching box indent)
+                assert line.startswith(" v2.0.0")
+                return
+        pytest.fail("Version line not found")
+
+    def test_preserves_original_banner_content(self):
+        from zoyd.tui.banner import ZOYD_BANNER, get_versioned_banner
+
+        result = get_versioned_banner("1.0.0")
+        # All original lines should still be present
+        for line in ZOYD_BANNER.split("\n"):
+            if line.strip():
+                assert line in result
+
+    def test_different_versions(self):
+        from zoyd.tui.banner import get_versioned_banner
+
+        for version in ["0.1.0", "3.14.159", "10.20.30"]:
+            result = get_versioned_banner(version)
+            assert f"v{version}" in result
+
+
 class TestBannerModuleImports:
     def test_exports_are_available(self):
         from zoyd.tui.banner import (
             ZOYD_BANNER,
             get_banner_text,
+            get_versioned_banner,
             print_banner,
         )
 
         assert ZOYD_BANNER is not None
         assert callable(print_banner)
         assert callable(get_banner_text)
+        assert callable(get_versioned_banner)
 
     def test_tui_init_exports_banner(self):
         from zoyd.tui import (
