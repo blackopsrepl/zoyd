@@ -19,7 +19,8 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.text import Text
 
-from zoyd.tui.banner import ZOYD_BANNER
+from zoyd import __version__
+from zoyd.tui.banner import get_versioned_banner
 from zoyd.tui.panels import create_status_bar
 from zoyd.tui.spinners import MindFlayerSpinner
 from zoyd.tui.theme import COLORS
@@ -196,14 +197,17 @@ class LiveDisplay:
         self._refresh()
 
     def _render_banner(self) -> RenderableType:
-        """Render the ZOYD ASCII art banner with mind flayer art.
+        """Render the ZOYD ASCII art banner with mind flayer art and version.
+
+        Uses ``get_versioned_banner(__version__)`` to include the version
+        string below the second box in the banner.
 
         Returns:
             Rich renderable for the banner panel.
         """
-        # Build the banner text with psionic purple styling
+        versioned = get_versioned_banner(__version__)
         banner_text = Text()
-        for line in ZOYD_BANNER.strip().split("\n"):
+        for line in versioned.strip().split("\n"):
             banner_text.append(line + "\n", style=f"bold {COLORS['psionic']}")
 
         return Panel(
