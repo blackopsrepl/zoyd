@@ -460,6 +460,8 @@ class PlainDisplay:
         self._iteration = 0
         self._cost = 0.0
         self._task_text: str | None = None
+        self._completed = 0
+        self._total = 0
 
     @property
     def iteration(self) -> int:
@@ -488,6 +490,18 @@ class PlainDisplay:
             text: Task text, or None to clear.
         """
         self._task_text = text
+
+    def set_completion(self, completed: int, total: int) -> None:
+        """Set the task completion counts.
+
+        Stores state for API compatibility but does not produce output.
+
+        Args:
+            completed: Number of completed tasks.
+            total: Total number of tasks.
+        """
+        self._completed = completed
+        self._total = total
 
     def start_spinner(self, text: str = "Invoking Claude...") -> None:
         """Start the loading spinner (no-op in plain mode).

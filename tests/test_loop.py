@@ -2195,6 +2195,33 @@ class TestPlainDisplay:
         display.set_task(None)
         assert display._task_text is None
 
+    def test_plain_display_set_completion_initial(self):
+        """Test that PlainDisplay._completed and _total start at zero."""
+        from zoyd.tui.live import PlainDisplay
+
+        display = PlainDisplay(prd_path="test.md", max_iterations=10)
+        assert display._completed == 0
+        assert display._total == 0
+
+    def test_plain_display_set_completion(self):
+        """Test that PlainDisplay.set_completion stores state."""
+        from zoyd.tui.live import PlainDisplay
+
+        display = PlainDisplay(prd_path="test.md", max_iterations=10)
+        display.set_completion(5, 10)
+        assert display._completed == 5
+        assert display._total == 10
+
+    def test_plain_display_set_completion_noop_output(self, capsys):
+        """Test that PlainDisplay.set_completion produces no output."""
+        from zoyd.tui.live import PlainDisplay
+
+        display = PlainDisplay(prd_path="test.md", max_iterations=10)
+        display.set_completion(3, 7)
+
+        captured = capsys.readouterr()
+        assert captured.out == ""
+
     def test_plain_display_context_manager(self, capsys):
         """Test that PlainDisplay context manager prints startup banner."""
         from zoyd.tui.live import PlainDisplay
