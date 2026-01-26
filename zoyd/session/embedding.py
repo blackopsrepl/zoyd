@@ -317,6 +317,61 @@ class LocalOnnxProvider:
             return False
 
 
+class UnavailableProvider:
+    """Stub provider returned when no embedding backend is available.
+
+    Always returns ``is_available() == False`` and raises on ``embed()``.
+    """
+
+    def embed(self, text: str) -> list[float]:
+        raise RuntimeError("No embedding provider is available")
+
+    def dimension(self) -> int:
+        return DIMENSION
+
+    def is_available(self) -> bool:
+        return False
+
+
+def get_provider(
+    host: str = "localhost",
+    port: int = 6379,
+    db: int = 0,
+    password: str | None = None,
+    model_key: str = MODEL_KEY,
+    cache_dir: str | None = None,
+) -> EmbeddingProvider:
+    """Auto-select the best available embedding provider.
+
+    Tries RedisAI first (via ``AI.INFO``), then falls back to local ONNX.
+    Returns an ``UnavailableProvider`` if neither works.
+
+    Args:
+        host: Redis server hostname.
+        port: Redis server port.
+        db: Redis database number.
+        password: Redis password.
+        model_key: RedisAI model key name.
+        cache_dir: Local ONNX model cache directory.
+
+    Returns:
+        An ``EmbeddingProvider`` instance — ``RedisAIProvider`` if RedisAI
+        is available, ``LocalOnnxProvider`` if local ONNX works, or
+        ``UnavailableProvider`` if neither is available.
+    """
+    redis_provider = RedisAIProvider(
+        host=host, port=port, db=db, password=password, model_key=model_key
+    )
+    if redis_provider.is_available():
+        return redis_provider
+
+    local_provider = LocalOnnxProvider(cache_dir=cache_dir)
+    if local_provider.is_available():
+        return local_provider
+
+    return UnavailableProvider()
+
+
 def _int64_list_to_blob(values: list[int]) -> bytes:
     """Pack a list of ints into a little-endian INT64 blob."""
     return struct.pack(f"<{len(values)}q", *values)
