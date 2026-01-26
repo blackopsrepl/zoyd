@@ -116,3 +116,44 @@ class VectorMemory:
         )
 
         return element_id
+
+    def store_task(
+        self,
+        session_id: str,
+        task_text: str,
+        line_number: int,
+    ) -> str | None:
+        """Store a task description embedding and metadata.
+
+        Generates a unique element ID, embeds the task text via the
+        provider, adds it to the tasks vector set with ``VADD``, and
+        stores JSON metadata at ``zoyd:vectors:meta:{element_id}``.
+
+        Args:
+            session_id: The current session identifier.
+            task_text: The task description text.
+            line_number: Line number of the task in the PRD file.
+
+        Returns:
+            The element ID if stored successfully, or ``None`` on failure.
+        """
+        element_id = f"task:{session_id}:{line_number}:{uuid.uuid4().hex[:8]}"
+        vector = self.provider.embed(task_text)
+
+        # VADD key FP32 element_id V1 V2 ... Vn
+        self.client.execute_command(
+            "VADD", TASKS_KEY, "FP32", element_id, *vector,
+        )
+
+        # Store metadata as JSON at a separate key
+        metadata = {
+            "session_id": session_id,
+            "task_text": task_text,
+            "line_number": line_number,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        self.client.set(
+            f"{META_PREFIX}{element_id}", json.dumps(metadata),
+        )
+
+        return element_id
