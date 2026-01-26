@@ -239,7 +239,7 @@ def invoke_claude(
         with open(settings_fd, "w") as f:
             json_module.dump(sandbox_settings, f)
 
-        cmd = ["claude", "--print", "--permission-mode", "acceptEdits", "--settings", settings_path]
+        cmd = ["claude", "--print", "--permission-mode", "acceptEdits", "--disallowedTools", "Bash(git *)", "--settings", settings_path]
 
         if model:
             cmd.extend(["--model", model])
