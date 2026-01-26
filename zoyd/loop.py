@@ -58,6 +58,31 @@ IMPORTANT: Work on ONLY this task. Do NOT work on other tasks. Do NOT run any gi
 {progress_content}
 """
 
+PROMPT_TEMPLATE_WITH_MEMORY = """You are working on a project defined by the PRD.
+Complete the next incomplete task marked with [ ].
+
+When you complete a task:
+1. Make code changes
+2. Run tests to verify
+3. Mark task complete ([ ] -> [x]) in PRD
+
+Status: Iteration {iteration}, {completed}/{total} tasks complete
+
+## Current Task (COMPLETE THIS ONLY)
+{current_task}
+
+IMPORTANT: Work on ONLY this task. Do NOT work on other tasks. Do NOT run any git commands (no git add, git commit, git push, etc.).
+
+## Relevant Context from Past Work
+{relevant_context}
+
+## Recent Progress
+{recent_progress}
+
+## PRD (for context only)
+{prd_content}
+"""
+
 # Prompt template for generating commit messages (conventional commits, no signatures)
 COMMIT_PROMPT_TEMPLATE = """Generate a git commit message for the changes below.
 
