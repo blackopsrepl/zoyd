@@ -70,6 +70,39 @@ class VectorMemory:
             )
         return self._client
 
+    @property
+    def is_available(self) -> bool:
+        """Check if vector memory is fully operational.
+
+        Verifies three conditions:
+        1. Redis connection is alive (``PING``)
+        2. Redis supports VSET commands (``VINFO`` on the outputs key)
+        3. The embedding provider reports itself as available
+
+        Returns:
+            ``True`` if all three checks pass, ``False`` otherwise.
+        """
+        try:
+            if not self.provider.is_available():
+                return False
+            self.client.ping()
+            # VINFO will succeed on an existing vset or raise an error
+            # if VSET commands are not supported. A "not found" error
+            # for a key that doesn't exist yet is acceptable — it
+            # means the server *supports* the command.
+            try:
+                self.client.execute_command("VINFO", OUTPUTS_KEY)
+            except Exception as exc:
+                msg = str(exc).lower()
+                # Key not existing is fine — the command was recognized.
+                if "not found" in msg or "no such key" in msg or "does not exist" in msg:
+                    pass
+                else:
+                    return False
+            return True
+        except Exception:
+            return False
+
     def store_output(
         self,
         session_id: str,
