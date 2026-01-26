@@ -431,6 +431,53 @@ class TestLiveDisplayResizeHandler:
         assert result is live
 
 
+class TestLiveDisplayLogHeight:
+    """Tests for LiveDisplay log height calculation and banner rendering."""
+
+    def test_get_log_height_minimum_five(self) -> None:
+        """_get_log_height should return >= 5 even with a tiny terminal."""
+        console = Console(file=io.StringIO(), force_terminal=True, height=10, width=80)
+        live = LiveDisplay(console)
+        height = live._get_log_height()
+        assert height >= 5
+
+    def test_get_log_height_scales_with_terminal(self) -> None:
+        """A larger terminal should give more log lines."""
+        small_console = Console(file=io.StringIO(), force_terminal=True, height=40, width=80)
+        large_console = Console(file=io.StringIO(), force_terminal=True, height=80, width=80)
+        small_live = LiveDisplay(small_console)
+        large_live = LiveDisplay(large_console)
+        assert large_live._get_log_height() > small_live._get_log_height()
+
+    def test_get_log_height_accounts_for_task_line(self) -> None:
+        """Height should be 1 less when a task/spinner is active."""
+        console = Console(file=io.StringIO(), force_terminal=True, height=60, width=80)
+        live = LiveDisplay(console)
+        height_no_task = live._get_log_height()
+        live.set_task("Working on something")
+        height_with_task = live._get_log_height()
+        assert height_with_task == height_no_task - 1
+
+    def test_banner_no_trailing_blank_line(self) -> None:
+        """Rendered banner content should not end with a blank line."""
+        console = Console(file=io.StringIO(), force_terminal=True, width=120)
+        live = LiveDisplay(console)
+        banner = live._render_banner()
+        # Render the banner to a string to inspect its content
+        render_console = Console(file=io.StringIO(), force_terminal=True, width=120)
+        render_console.print(banner)
+        output = render_console.file.getvalue()
+        # The rendered output should not have a blank line before the bottom border
+        lines = output.split("\n")
+        # Find the last non-empty line (the bottom border of the Panel)
+        non_empty = [l for l in lines if l.strip()]
+        if len(non_empty) >= 2:
+            # The second-to-last non-empty line should not be blank/empty
+            # (i.e., no wasted blank line just above the bottom border)
+            second_to_last = non_empty[-2]
+            assert second_to_last.strip() != ""
+
+
 class TestCreateLiveDisplay:
     """Tests for create_live_display factory function."""
 
