@@ -190,6 +190,35 @@ def build_prompt_with_memory(
     )
 
 
+def _extract_recent_iterations(progress_content: str, n: int) -> str:
+    """Extract the last N iterations from progress content.
+
+    Splits the progress content on ``## Iteration`` headers and returns the
+    last *n* iteration sections joined together.  Any preamble text before the
+    first ``## Iteration`` header is excluded.
+
+    Args:
+        progress_content: Full progress file content.
+        n: Number of recent iterations to return.
+
+    Returns:
+        The last *n* iteration sections as a single string, or an empty string
+        if there are no iterations.
+    """
+    if not progress_content:
+        return ""
+
+    parts = progress_content.split("\n## Iteration ")
+    # parts[0] is the preamble (before the first header), remaining are iterations
+    # Each iteration part (after the first) needs the header prefix restored
+    iterations = [f"## Iteration {part}" for part in parts[1:]]
+
+    if not iterations:
+        return ""
+
+    return "\n".join(iterations[-n:])
+
+
 def generate_commit_message(iteration_output: str, task_text: str, model: str | None = None) -> str | None:
     """Generate a commit message using Claude.
 
