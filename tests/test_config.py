@@ -314,7 +314,7 @@ class TestConfigurationPanelCLI:
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
             Path("test.md").write_text("# Test\n- [ ] Task\n")
-            result = runner.invoke(cli, ["run", "--dry-run", "--prd", "test.md", "--no-tui", "-n", "1"])
+            result = runner.invoke(cli, ["run", "--dry-run", "--prd", "test.md", "--no-tui", "-n", "1", "--no-session-log"])
             # PlainDisplay shows "PRD: <path>" in startup output
             assert "PRD:" in result.output
             assert "test.md" in result.output
@@ -325,7 +325,7 @@ class TestConfigurationPanelCLI:
         with runner.isolated_filesystem(temp_dir=tmp_path):
             Path("test.md").write_text("# Test\n- [ ] Task\n")
             result = runner.invoke(
-                cli, ["run", "--dry-run", "--prd", "test.md", "--progress", "my_progress.txt", "--no-tui", "-n", "1"]
+                cli, ["run", "--dry-run", "--prd", "test.md", "--progress", "my_progress.txt", "--no-tui", "-n", "1", "--no-session-log"]
             )
             # PlainDisplay shows "Progress: <path>" in startup output
             assert "Progress:" in result.output
@@ -336,7 +336,7 @@ class TestConfigurationPanelCLI:
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
             Path("test.md").write_text("# Test\n- [ ] Task\n")
-            result = runner.invoke(cli, ["run", "--dry-run", "--prd", "test.md", "-n", "5", "--no-tui"])
+            result = runner.invoke(cli, ["run", "--dry-run", "--prd", "test.md", "-n", "5", "--no-tui", "--no-session-log"])
             # PlainDisplay shows "Max iterations: N" in startup output
             assert "Max iterations: 5" in result.output
 
@@ -346,7 +346,7 @@ class TestConfigurationPanelCLI:
         with runner.isolated_filesystem(temp_dir=tmp_path):
             Path("test.md").write_text("# Test\n- [ ] Task\n")
             result = runner.invoke(
-                cli, ["run", "--dry-run", "--prd", "test.md", "--model", "opus", "--no-tui", "-n", "1"]
+                cli, ["run", "--dry-run", "--prd", "test.md", "--model", "opus", "--no-tui", "-n", "1", "--no-session-log"]
             )
             # PlainDisplay shows "Model: <model>" in startup output
             assert "Model:" in result.output
@@ -358,7 +358,7 @@ class TestConfigurationPanelCLI:
         with runner.isolated_filesystem(temp_dir=tmp_path):
             Path("test.md").write_text("# Test\n- [ ] Task\n")
             result = runner.invoke(
-                cli, ["run", "--dry-run", "--prd", "test.md", "--max-cost", "5.00", "--no-tui", "-n", "1"]
+                cli, ["run", "--dry-run", "--prd", "test.md", "--max-cost", "5.00", "--no-tui", "-n", "1", "--no-session-log"]
             )
             # PlainDisplay shows "Cost limit: $X.XX" in startup output
             assert "Cost limit:" in result.output
@@ -385,6 +385,7 @@ class TestConfigurationPanelCLI:
                     "--max-cost",
                     "2.50",
                     "--no-tui",
+                    "--no-session-log",
                 ],
             )
             # PlainDisplay prints all configuration in startup output
