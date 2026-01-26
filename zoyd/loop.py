@@ -141,7 +141,7 @@ def generate_commit_message(iteration_output: str, task_text: str, model: str | 
         iteration_output=iteration_output[:2000],  # Limit context size
         task_text=task_text,
     )
-    return_code, output, _ = invoke_claude(prompt, model, append_system_prompt=COMMIT_SYSTEM_PROMPT)
+    return_code, output, _ = invoke_claude(prompt, model, append_system_prompt=COMMIT_SYSTEM_PROMPT, sandbox=False)
     if return_code != 0:
         return None
     # Clean up the output - remove any accidental signatures
