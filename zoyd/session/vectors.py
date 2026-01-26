@@ -273,6 +273,53 @@ class VectorMemory:
 
         return results
 
+    def find_similar_errors(
+        self,
+        error_text: str,
+        count: int = 3,
+    ) -> list[dict[str, Any]]:
+        """Find errors semantically similar to the given error text.
+
+        Embeds the error text, runs ``VSIM`` against the errors vector set,
+        and retrieves metadata for each matching element.
+
+        Args:
+            error_text: Text to search for similar errors.
+            count: Maximum number of results to return.
+
+        Returns:
+            List of dicts with ``element_id``, ``score``, and metadata fields
+            (``session_id``, ``iteration``, ``task_text``, ``error_preview``,
+            ``timestamp``).  Empty list on failure.
+        """
+        vector = self.provider.embed(error_text)
+
+        # VSIM key FP32 count V1 V2 ... Vn  WITHSCORES
+        raw = self.client.execute_command(
+            "VSIM", ERRORS_KEY, "FP32", count, *vector, "WITHSCORES",
+        )
+
+        # ``raw`` is a flat list: [element_id, score, element_id, score, ...]
+        results: list[dict[str, Any]] = []
+        if not raw:
+            return results
+
+        for i in range(0, len(raw), 2):
+            element_id = raw[i]
+            score = float(raw[i + 1])
+
+            meta_raw = self.client.get(f"{META_PREFIX}{element_id}")
+            if meta_raw is None:
+                continue
+            meta = json.loads(meta_raw)
+
+            results.append({"element_id": element_id, "score": score, **meta})
+
+            if len(results) >= count:
+                break
+
+        return results
+
     def store_task(
         self,
         session_id: str,
