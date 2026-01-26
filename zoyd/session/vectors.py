@@ -7,6 +7,9 @@ and error patterns. Metadata is stored as JSON at separate keys.
 
 from __future__ import annotations
 
+import json
+import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 from zoyd.session.embedding import EmbeddingProvider
@@ -66,3 +69,50 @@ class VectorMemory:
                 decode_responses=True,
             )
         return self._client
+
+    def store_output(
+        self,
+        session_id: str,
+        iteration: int,
+        output: str,
+        task_text: str,
+        return_code: int,
+    ) -> str | None:
+        """Store an iteration output embedding and metadata.
+
+        Generates a unique element ID, embeds the output text via the
+        provider, adds it to the outputs vector set with ``VADD``, and
+        stores JSON metadata at ``zoyd:vectors:meta:{element_id}``.
+
+        Args:
+            session_id: The current session identifier.
+            iteration: Iteration number within the session.
+            output: Full Claude output text for this iteration.
+            task_text: The task being worked on.
+            return_code: Claude process return code.
+
+        Returns:
+            The element ID if stored successfully, or ``None`` on failure.
+        """
+        element_id = f"output:{session_id}:{iteration}:{uuid.uuid4().hex[:8]}"
+        vector = self.provider.embed(output)
+
+        # VADD key FP32 element_id V1 V2 ... Vn
+        self.client.execute_command(
+            "VADD", OUTPUTS_KEY, "FP32", element_id, *vector,
+        )
+
+        # Store metadata as JSON at a separate key
+        metadata = {
+            "session_id": session_id,
+            "iteration": iteration,
+            "task_text": task_text,
+            "output_preview": output[:500],
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "return_code": return_code,
+        }
+        self.client.set(
+            f"{META_PREFIX}{element_id}", json.dumps(metadata),
+        )
+
+        return element_id
