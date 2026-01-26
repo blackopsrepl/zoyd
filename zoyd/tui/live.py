@@ -299,22 +299,32 @@ class LiveDisplay:
     def _get_log_height(self) -> int:
         """Calculate the available height for the log panel.
 
-        Uses the terminal height minus the banner height (approximately 24 lines
-        for the banner + status + task line + padding).
+        Dynamically computes the overhead from the actual banner content,
+        status panel, optional task line, log panel borders, and a safety
+        margin for the Rich Live cursor.
 
         Returns:
             Number of lines available for the log panel.
         """
-        # Get terminal height, default to 40 if unavailable
         terminal_height = self.console.height or 40
 
-        # Banner is approximately 22 lines, plus status bar (2), task line (2),
-        # panel borders and padding (4). Reserve ~30 lines for non-log content.
-        banner_overhead = 30
+        # Count actual banner content lines
+        banner_lines = len(
+            get_versioned_banner(__version__).strip().split("\n")
+        )
+        # Banner Panel borders (top + bottom)
+        overhead = banner_lines + 2
+        # Status Panel: 1 content row + 2 borders
+        overhead += 3
+        # Task line: 1 if spinner or task text is active, else 0
+        if self._render_task_line() is not None:
+            overhead += 1
+        # Log Panel borders (top + bottom)
+        overhead += 2
+        # Safety margin for Rich Live cursor positioning
+        overhead += 1
 
-        # Calculate available height for logs (minimum 5 lines)
-        available = max(5, terminal_height - banner_overhead)
-        return available
+        return max(5, terminal_height - overhead)
 
     def _render_logs(self) -> RenderableType:
         """Render the scrolling log area with dynamic height.
