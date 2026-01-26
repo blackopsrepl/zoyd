@@ -40,6 +40,10 @@ class ZoydConfig:
     redis_port: int = 6379  # Redis server port
     redis_db: int = 0  # Redis database number
     redis_password: str | None = None  # Redis password (optional)
+    # Vector memory options
+    vector_memory: bool = False  # Enable semantic vector memory
+    vector_top_k: int = 5  # Number of relevant results to retrieve
+    vector_recent_n: int = 3  # Number of recent iterations to include
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "ZoydConfig":
