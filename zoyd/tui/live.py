@@ -20,6 +20,7 @@ from rich.text import Text
 
 from zoyd import __version__
 from zoyd.tui.banner import get_versioned_banner
+from zoyd.tui.keyboard import Key, KeyboardListener, KeyEvent
 from zoyd.tui.panels import create_status_bar
 from zoyd.tui.spinners import MindFlayerSpinner
 from zoyd.tui.theme import COLORS
@@ -88,6 +89,9 @@ class LiveDisplay:
 
         # Live display
         self._live: Live | None = None
+
+        # Keyboard listener for scroll navigation
+        self._keyboard: KeyboardListener | None = None
 
         # Signal handler for terminal resize
         self._old_sigwinch_handler: Callable[[int, Any], Any] | int | None = None
@@ -386,6 +390,42 @@ class LiveDisplay:
         if self._live is not None:
             self._live.update(self._render())
 
+    # --- Keyboard scroll handling ---
+
+    def _on_key(self, event: KeyEvent) -> None:
+        """Handle a key event from the keyboard listener.
+
+        Adjusts ``_scroll_offset`` based on the key pressed and refreshes
+        the display.
+
+        Key bindings:
+            Up      – scroll up 1 line
+            Down    – scroll down 1 line
+            PgUp    – scroll up by viewport height
+            PgDn    – scroll down by viewport height
+            Home    – scroll to top
+            End     – scroll to bottom (re-enable auto-scroll)
+        """
+        total = len(self._log_lines)
+        log_height = self._get_log_height()
+        # Maximum scroll offset: total lines minus one viewport, clamped to 0
+        max_offset = max(0, total - log_height)
+
+        if event.key == Key.UP:
+            self._scroll_offset = min(max_offset, self._scroll_offset + 1)
+        elif event.key == Key.DOWN:
+            self._scroll_offset = max(0, self._scroll_offset - 1)
+        elif event.key == Key.PAGE_UP:
+            self._scroll_offset = min(max_offset, self._scroll_offset + log_height)
+        elif event.key == Key.PAGE_DOWN:
+            self._scroll_offset = max(0, self._scroll_offset - log_height)
+        elif event.key == Key.HOME:
+            self._scroll_offset = max_offset
+        elif event.key == Key.END:
+            self._scroll_offset = 0  # Re-enable auto-scroll
+
+        self._refresh()
+
     # --- Terminal resize handling ---
 
     def _handle_resize(self, signum: int, frame: Any) -> None:
@@ -443,7 +483,9 @@ class LiveDisplay:
     def __enter__(self) -> LiveDisplay:
         """Enter the live display context.
 
-        Installs a SIGWINCH handler to gracefully handle terminal resizes.
+        Installs a SIGWINCH handler to gracefully handle terminal resizes,
+        starts the Rich Live display, then starts the keyboard listener
+        for scroll navigation.
 
         Returns:
             Self for use in with statement.
@@ -459,13 +501,26 @@ class LiveDisplay:
             screen=False,
         )
         self._live.__enter__()
+
+        # Start keyboard listener after Live.__enter__ so the terminal
+        # is already in the right state.
+        self._keyboard = KeyboardListener(callback=self._on_key)
+        self._keyboard.start()
+
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """Exit the live display context.
 
-        Restores the previous SIGWINCH handler.
+        Stops the keyboard listener (restoring terminal settings) before
+        stopping the Live display, then restores the SIGWINCH handler.
         """
+        # Stop keyboard listener before Live.__exit__ so terminal
+        # settings are restored cleanly.
+        if self._keyboard is not None:
+            self._keyboard.stop()
+            self._keyboard = None
+
         if self._live is not None:
             self._live.__exit__(exc_type, exc_val, exc_tb)
             self._live = None
