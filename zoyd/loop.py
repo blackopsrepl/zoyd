@@ -666,8 +666,7 @@ class LoopRunner:
                         self.stats_failures += 1
                         self.stats_iterations += 1
                         self.live.log_error(f"Claude returned error (code {return_code})")
-                        if self.verbose:
-                            self.live.log_markdown(output)
+                        self.live.log_lines(output)
 
                         # Fail-fast: exit immediately on first failure
                         if self.fail_fast:
