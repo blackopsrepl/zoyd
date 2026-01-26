@@ -49,7 +49,7 @@ Status: Iteration {iteration}, {completed}/{total} tasks complete
 ## Current Task (COMPLETE THIS ONLY)
 {current_task}
 
-IMPORTANT: Work on ONLY this task. Do NOT work on other tasks. One task = one commit.
+IMPORTANT: Work on ONLY this task. Do NOT work on other tasks. Do NOT run any git commands (no git add, git commit, git push, etc.).
 
 ## PRD (for context only)
 {prd_content}
