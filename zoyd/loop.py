@@ -226,9 +226,12 @@ def invoke_claude(
     Returns:
         Tuple of (return_code, output, cost_usd). cost_usd is None if not tracking or unavailable.
     """
-    # Enable sandbox mode via settings for filesystem/network isolation
+    # Configure sandbox settings for filesystem/network isolation
     # Claude expects --settings to be a file path, not inline JSON
-    sandbox_settings = {"sandbox": {"enabled": True, "autoAllowBashIfSandboxed": True}}
+    if sandbox:
+        sandbox_settings = {"sandbox": {"enabled": True, "autoAllowBashIfSandboxed": True}}
+    else:
+        sandbox_settings = {"sandbox": {"enabled": False}}
 
     # Create a temp file for settings
     settings_fd, settings_path = tempfile.mkstemp(suffix=".json", prefix="zoyd_settings_")
