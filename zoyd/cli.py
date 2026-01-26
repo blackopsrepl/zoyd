@@ -100,7 +100,7 @@ def cli():
 @click.option(
     "--session-log/--no-session-log",
     default=None,
-    help="Enable/disable session logging to .zoyd/sessions/ (default: disabled)",
+    help="Enable/disable session logging to .zoyd/sessions/ (default: enabled)",
 )
 @click.option(
     "--sessions-dir",
@@ -112,7 +112,7 @@ def cli():
     "--storage-backend",
     default=None,
     type=click.Choice(["file", "redis"]),
-    help="Storage backend for session logs: 'file' or 'redis' (default: file)",
+    help="Storage backend for session logs: 'file' or 'redis' (default: redis)",
 )
 @click.option(
     "--redis-host",

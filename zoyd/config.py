@@ -32,10 +32,10 @@ class ZoydConfig:
     tui_refresh_rate: float = 4.0  # Dashboard refresh rate in Hz
     tui_compact: bool = False  # Use compact banner for narrow terminals
     # Session logging options
-    session_logging: bool = False  # Enable persistent session logging
+    session_logging: bool = True  # Enable persistent session logging
     sessions_dir: str = ".zoyd/sessions"  # Directory for session files
     # Redis storage backend options
-    storage_backend: str = "file"  # Storage backend: "file" or "redis"
+    storage_backend: str = "redis"  # Storage backend: "file" or "redis"
     redis_host: str = "localhost"  # Redis server hostname
     redis_port: int = 6379  # Redis server port
     redis_db: int = 0  # Redis database number
