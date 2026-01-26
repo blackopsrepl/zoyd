@@ -497,8 +497,9 @@ class ErrorPanel:
 
 def create_status_bar(
     *,
-    prd: str | None = None,
-    progress: str | None = None,
+    task: str | None = None,
+    completed: int = 0,
+    total: int = 0,
     iteration: int | None = None,
     max_iterations: int | None = None,
     model: str | None = None,
@@ -508,8 +509,9 @@ def create_status_bar(
     """Create a status bar with common loop runner information.
 
     Args:
-        prd: Path to the PRD file.
-        progress: Path to the progress file.
+        task: Current task description.
+        completed: Number of completed tasks.
+        total: Total number of tasks.
         iteration: Current iteration number.
         max_iterations: Maximum iterations allowed.
         model: Claude model being used.
@@ -521,11 +523,11 @@ def create_status_bar(
     """
     bar = StatusBar(title="Status")
 
-    if prd:
-        bar.add_item("PRD", prd)
+    if task:
+        bar.add_item("Task", task)
 
-    if progress:
-        bar.add_item("Progress", progress)
+    if total > 0:
+        bar.add_item("Completed", f"{completed}/{total}")
 
     if iteration is not None:
         if max_iterations is not None:

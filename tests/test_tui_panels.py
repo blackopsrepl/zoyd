@@ -391,18 +391,31 @@ class TestCreateStatusBar:
         bar = create_status_bar()
         assert bar is not None
 
-    def test_with_prd(self):
+    def test_with_task(self):
         from zoyd.tui.panels import create_status_bar
 
-        bar = create_status_bar(prd="test.md")
+        bar = create_status_bar(task="Implement feature X")
 
         output = StringIO()
         console = Console(file=output, force_terminal=True, width=80)
         console.print(bar.render())
         rendered = output.getvalue()
 
-        assert "PRD" in rendered
-        assert "test.md" in rendered
+        assert "Task" in rendered
+        assert "Implement feature X" in rendered
+
+    def test_with_completed(self):
+        from zoyd.tui.panels import create_status_bar
+
+        bar = create_status_bar(completed=3, total=10)
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=80)
+        console.print(bar.render())
+        rendered = output.getvalue()
+
+        assert "Completed" in rendered
+        assert "3/10" in rendered
 
     def test_with_iteration(self):
         from zoyd.tui.panels import create_status_bar
@@ -472,7 +485,9 @@ class TestCreateStatusBar:
         from zoyd.tui.panels import create_status_bar
 
         bar = create_status_bar(
-            prd="my.md",
+            task="Fix the bug",
+            completed=5,
+            total=8,
             iteration=3,
             max_iterations=10,
             model="sonnet",
@@ -481,11 +496,12 @@ class TestCreateStatusBar:
         )
 
         output = StringIO()
-        console = Console(file=output, force_terminal=True, width=80)
+        console = Console(file=output, force_terminal=True, width=120)
         console.print(bar.render())
         rendered = output.getvalue()
 
-        assert "my.md" in rendered
+        assert "Fix the bug" in rendered
+        assert "5/8" in rendered
         assert "3/10" in rendered
         assert "sonnet" in rendered
         assert "$0.5" in rendered
