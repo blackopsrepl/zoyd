@@ -227,6 +227,7 @@ class LiveDisplay:
             banner_text,
             border_style=COLORS["twilight"],
             padding=(0, 2),
+            subtitle=f"PRD: {self.prd_path}  |  Progress: {self.progress_path}",
         )
 
     def _render_status(self) -> RenderableType:
