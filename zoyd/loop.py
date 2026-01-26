@@ -318,9 +318,9 @@ class LoopRunner:
         tui_enabled: bool = True,
         tui_refresh_rate: float = 4.0,
         tui_compact: bool = False,
-        session_logging: bool = False,
+        session_logging: bool = True,
         sessions_dir: str = ".zoyd/sessions",
-        storage_backend: str = "file",
+        storage_backend: str = "redis",
         redis_host: str = "localhost",
         redis_port: int = 6379,
         redis_db: int = 0,
@@ -382,8 +382,9 @@ class LoopRunner:
         # Event emitter for TUI dashboard integration
         self.events = EventEmitter()
         # Session logger for persistent logging
+        # Skip session logging in dry-run mode (no point logging a dry run)
         self.session_logger: SessionLogger | None = None
-        if self.session_logging:
+        if self.session_logging and not self.dry_run:
             storage = create_storage(
                 backend=self.storage_backend,
                 sessions_dir=self.sessions_dir,
