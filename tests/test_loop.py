@@ -540,6 +540,29 @@ class TestSandboxMode:
             assert "autoAllowBashIfSandboxed" not in settings["sandbox"]
 
 
+class TestDisallowedTools:
+    """Tests for --disallowedTools flag in invoke_claude()."""
+
+    def test_disallowed_tools_flag_in_command(self):
+        """Test that invoke_claude passes --disallowedTools 'Bash(git *)' to block git commands."""
+        from zoyd.loop import invoke_claude
+
+        captured_cmd = None
+
+        def capture_cmd(*args, **kwargs):
+            nonlocal captured_cmd
+            captured_cmd = kwargs.get("args") or args[0]
+            return MagicMock(returncode=0, stdout="output", stderr="")
+
+        with patch("zoyd.loop.subprocess.run", side_effect=capture_cmd):
+            invoke_claude("test prompt")
+
+        assert captured_cmd is not None
+        assert "--disallowedTools" in captured_cmd
+        idx = captured_cmd.index("--disallowedTools")
+        assert captured_cmd[idx + 1] == "Bash(git *)"
+
+
 class TestDetectCannotComplete:
     """Tests for detecting when Claude cannot complete a task."""
 
