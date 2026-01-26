@@ -90,6 +90,13 @@ class ZoydConfig:
             config.redis_db = int(data["redis_db"])
         if "redis_password" in data:
             config.redis_password = str(data["redis_password"]) if data["redis_password"] else None
+        # Vector memory options
+        if "vector_memory" in data:
+            config.vector_memory = bool(data["vector_memory"])
+        if "vector_top_k" in data:
+            config.vector_top_k = int(data["vector_top_k"])
+        if "vector_recent_n" in data:
+            config.vector_recent_n = int(data["vector_recent_n"])
         return config
 
 
