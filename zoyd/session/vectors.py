@@ -320,6 +320,59 @@ class VectorMemory:
 
         return results
 
+    def remove_session(self, session_id: str) -> int:
+        """Remove all vector elements and metadata for a session.
+
+        Scans for metadata keys matching the session's element ID prefixes
+        (``output:{session_id}:*``, ``task:{session_id}:*``,
+        ``error:{session_id}:*``), removes the elements from their
+        respective vector sets with ``VREM``, and deletes the metadata keys.
+
+        Args:
+            session_id: The session identifier whose data should be removed.
+
+        Returns:
+            The total number of elements removed across all vector sets.
+        """
+        removed = 0
+
+        # Each tuple: (element_id_prefix, vector_set_key)
+        prefixes = [
+            (f"output:{session_id}:", OUTPUTS_KEY),
+            (f"task:{session_id}:", TASKS_KEY),
+            (f"error:{session_id}:", ERRORS_KEY),
+        ]
+
+        for prefix, vset_key in prefixes:
+            # Scan for metadata keys matching this prefix
+            meta_pattern = f"{META_PREFIX}{prefix}*"
+            meta_keys: list[str] = []
+            element_ids: list[str] = []
+
+            cursor = 0
+            while True:
+                cursor, keys = self.client.scan(
+                    cursor=cursor, match=meta_pattern, count=100,
+                )
+                for key in keys:
+                    meta_keys.append(key)
+                    # Extract element_id from key by stripping META_PREFIX
+                    element_id = key[len(META_PREFIX):]
+                    element_ids.append(element_id)
+                if cursor == 0:
+                    break
+
+            # VREM each element from the vector set
+            for element_id in element_ids:
+                self.client.execute_command("VREM", vset_key, element_id)
+                removed += 1
+
+            # DEL all metadata keys in one batch
+            if meta_keys:
+                self.client.delete(*meta_keys)
+
+        return removed
+
     def store_task(
         self,
         session_id: str,
