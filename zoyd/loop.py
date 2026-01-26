@@ -59,24 +59,7 @@ IMPORTANT: Work on ONLY this task. Do NOT work on other tasks. One task = one co
 """
 
 # Prompt template for generating commit messages (conventional commits, no signatures)
-COMMIT_PROMPT_TEMPLATE = """Generate a git commit message using Conventional Commits format.
-
-Format: <type>(<scope>): <description>
-
-Types:
-- feat: new feature
-- fix: bug fix
-- docs: documentation only
-- style: formatting, no code change
-- refactor: code restructuring, no feature/fix
-- test: adding/updating tests
-- chore: maintenance, build, config
-
-Rules:
-- Subject line: type(scope): description (72 chars max, lowercase)
-- Scope is optional but encouraged (e.g., feat(cli): add --json flag)
-- Body is optional, separated by blank line, explains why not what
-- NO Co-Author, Co-Authored-By, Signed-off-by, or similar signatures
+COMMIT_PROMPT_TEMPLATE = """Generate a git commit message for the changes below.
 
 Changes made this iteration:
 {iteration_output}
@@ -84,6 +67,15 @@ Changes made this iteration:
 Task completed: {task_text}
 
 Respond with ONLY the commit message, nothing else."""
+
+# System-level rules for commit message generation (delivered via --append-system-prompt)
+COMMIT_SYSTEM_PROMPT = """\
+Use Conventional Commits format: <type>(<scope>): <description>
+Types: feat, fix, docs, style, refactor, test, chore, perf, ci, build, revert.
+Subject line: type(scope): description (72 chars max, lowercase).
+Scope is optional but encouraged (e.g., feat(cli): add --json flag).
+Body is optional, separated by blank line, explains why not what.
+Never add Co-Authored-By, Signed-off-by, or any signature lines to commits."""
 
 
 def detect_cannot_complete(output: str) -> tuple[bool, str | None]:
@@ -149,7 +141,7 @@ def generate_commit_message(iteration_output: str, task_text: str, model: str | 
         iteration_output=iteration_output[:2000],  # Limit context size
         task_text=task_text,
     )
-    return_code, output, _ = invoke_claude(prompt, model)
+    return_code, output, _ = invoke_claude(prompt, model, append_system_prompt=COMMIT_SYSTEM_PROMPT)
     if return_code != 0:
         return None
     # Clean up the output - remove any accidental signatures
@@ -217,6 +209,7 @@ def invoke_claude(
     model: str | None = None,
     cwd: Path | None = None,
     track_cost: bool = False,
+    append_system_prompt: str | None = None,
 ) -> tuple[int, str, float | None]:
     """Invoke Claude Code with the given prompt in sandbox mode.
 
@@ -225,6 +218,7 @@ def invoke_claude(
         model: Optional model to use (e.g., "opus", "sonnet").
         cwd: Working directory for Claude.
         track_cost: If True, use JSON output format to track cost.
+        append_system_prompt: Optional text appended to the system prompt.
 
     Returns:
         Tuple of (return_code, output, cost_usd). cost_usd is None if not tracking or unavailable.
@@ -246,6 +240,9 @@ def invoke_claude(
 
         if track_cost:
             cmd.extend(["--output-format", "json"])
+
+        if append_system_prompt:
+            cmd.extend(["--append-system-prompt", append_system_prompt])
 
         # Prompt is passed as a positional argument, not via --prompt
         cmd.append(prompt)

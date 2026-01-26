@@ -14,6 +14,7 @@ from zoyd.loop import (
     detect_cannot_complete,
     format_duration,
     COMMIT_PROMPT_TEMPLATE,
+    COMMIT_SYSTEM_PROMPT,
 )
 from zoyd.cli import cli
 
@@ -244,11 +245,11 @@ class TestAutoCommit:
         )
         assert runner.auto_commit is False
 
-    def test_commit_prompt_no_coauthor(self):
-        """Test that commit prompt explicitly forbids Co-Author lines."""
-        assert "Co-Author" in COMMIT_PROMPT_TEMPLATE
-        assert "NO" in COMMIT_PROMPT_TEMPLATE  # "NO Co-Author..."
-        assert "Co-Authored-By" in COMMIT_PROMPT_TEMPLATE
+    def test_commit_system_prompt_no_coauthor(self):
+        """Test that commit system prompt explicitly forbids signature lines."""
+        assert "Co-Authored-By" in COMMIT_SYSTEM_PROMPT
+        assert "Signed-off-by" in COMMIT_SYSTEM_PROMPT
+        assert "Never" in COMMIT_SYSTEM_PROMPT
 
     @patch("zoyd.loop.subprocess.run")
     def test_commit_changes_success(self, mock_run):
