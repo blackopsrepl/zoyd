@@ -224,7 +224,8 @@ class TestCLIConfigIntegration:
             Path("custom.md").write_text("# Test PRD\n- [ ] Task 1\n")
 
             # Use --no-tui to get capturable output (screen=True uses alternate buffer)
-            result = runner.invoke(cli, ["run", "--dry-run", "--no-tui"])
+            # Use --no-session-log to avoid Redis connection attempts
+            result = runner.invoke(cli, ["run", "--dry-run", "--no-tui", "--no-session-log"])
             # Should use custom.md from config - verify by checking the PRD content in dry-run prompt
             assert "# Test PRD" in result.output
             # Max iterations 3 means it stops at iteration 3/3
