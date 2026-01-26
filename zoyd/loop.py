@@ -250,11 +250,10 @@ def invoke_claude(
         if append_system_prompt:
             cmd.extend(["--append-system-prompt", append_system_prompt])
 
-        # Prompt is passed as a positional argument, not via --prompt
-        cmd.append(prompt)
-
+        # Pass prompt via stdin to avoid OS ARG_MAX limit (E2BIG) on large prompts
         result = subprocess.run(
             cmd,
+            input=prompt,
             capture_output=True,
             text=True,
             check=False,
