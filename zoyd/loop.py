@@ -219,6 +219,52 @@ def _extract_recent_iterations(progress_content: str, n: int) -> str:
     return "\n".join(iterations[-n:])
 
 
+def _format_relevant_context(results: list[dict]) -> str:
+    """Format vector search results into a readable prompt section.
+
+    Takes the list of dicts returned by
+    :meth:`VectorMemory.find_relevant_outputs` and produces a human-readable
+    string suitable for insertion into the ``{relevant_context}`` placeholder
+    of :data:`PROMPT_TEMPLATE_WITH_MEMORY`.
+
+    Each result is rendered as a numbered entry with its task, session, and
+    a preview of the output.
+
+    Args:
+        results: List of result dicts from ``find_relevant_outputs()``.  Each
+            dict contains ``element_id``, ``score``, ``session_id``,
+            ``iteration``, ``task_text``, ``output_preview``, ``timestamp``,
+            and ``return_code``.
+
+    Returns:
+        Formatted context string, or ``"(No relevant context found)"`` if
+        *results* is empty.
+    """
+    if not results:
+        return "(No relevant context found)"
+
+    sections: list[str] = []
+    for i, result in enumerate(results, 1):
+        task = result.get("task_text", "Unknown task")
+        session = result.get("session_id", "unknown")[:8]
+        iteration = result.get("iteration", "?")
+        score = result.get("score", 0.0)
+        preview = result.get("output_preview", "")
+        rc = result.get("return_code", None)
+
+        header = f"### {i}. {task}"
+        meta_parts = [f"Session: {session}", f"Iteration: {iteration}"]
+        if rc is not None:
+            meta_parts.append(f"Exit: {rc}")
+        meta_parts.append(f"Similarity: {score:.3f}")
+        meta_line = " | ".join(meta_parts)
+
+        section = f"{header}\n{meta_line}\n\n{preview}"
+        sections.append(section)
+
+    return "\n\n---\n\n".join(sections)
+
+
 def generate_commit_message(iteration_output: str, task_text: str, model: str | None = None) -> str | None:
     """Generate a commit message using Claude.
 
