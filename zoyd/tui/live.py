@@ -237,6 +237,9 @@ class LiveDisplay:
             Rich renderable for the status bar.
         """
         bar = create_status_bar(
+            task=self._task_text,
+            completed=self._completed,
+            total=self._total,
             iteration=self._iteration,
             max_iterations=self.max_iterations,
             model=self.model,
