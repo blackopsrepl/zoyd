@@ -285,7 +285,8 @@ class TestCLIConfigIntegration:
             Path("test.md").write_text("# Test\n- [ ] Task\n")
 
             # Use --no-tui to get capturable output (screen=True uses alternate buffer)
-            result = runner.invoke(cli, ["run", "--dry-run", "--no-tui"])
+            # Use --no-session-log to avoid Redis connection attempts
+            result = runner.invoke(cli, ["run", "--dry-run", "--no-tui", "--no-session-log"])
             # Model config is used - shown in startup output
             assert "opus" in result.output
 
