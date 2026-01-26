@@ -197,6 +197,18 @@ class LiveDisplay:
         """
         self.log(f"[warning]{message}", style="warning")
 
+    def log_lines(self, content: str) -> None:
+        """Log content by splitting into individual lines.
+
+        Each line is appended as a separate Text renderable to the log area.
+
+        Args:
+            content: Content string to split and log line by line.
+        """
+        for line in content.split("\n"):
+            self._log_lines.append(Text(line))
+        self._refresh()
+
     def log_markdown(self, content: str, *, code_theme: str | None = None) -> None:
         """Log markdown content with syntax highlighting for code blocks.
 
