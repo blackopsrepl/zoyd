@@ -707,8 +707,7 @@ class LoopRunner:
                         self.consecutive_failures = 0
                         self.stats_successes += 1
                         self.stats_iterations += 1
-                        if self.verbose:
-                            self.live.log_markdown(output)
+                        self.live.log_lines(output)
 
                         # Check if Claude indicated it cannot complete the task
                         cannot_complete, reason = detect_cannot_complete(output)
