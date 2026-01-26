@@ -9,14 +9,14 @@ Redis is now the default storage backend with session logging enabled. Tests fai
 
 ### Fix test_config.py Tests
 - [x] Add --no-session-log flag to test_run_uses_config_defaults (tests/test_config.py)
-- [ ] Add --no-session-log flag to test_run_cli_overrides_config (tests/test_config.py)
-- [ ] Add --no-session-log flag to test_run_model_from_config (tests/test_config.py)
-- [ ] Add --no-session-log flag to test_config_panel_* tests (tests/test_config.py)
-- [ ] Add --no-session-log flag to test_tui_enabled_config_controls_no_tui (tests/test_config.py)
-- [ ] Add --no-session-log flag to test_no_tui_flag_overrides_config (tests/test_config.py)
+- [x] Add --no-session-log flag to test_run_cli_overrides_config (tests/test_config.py)
+- [x] Add --no-session-log flag to test_run_model_from_config (tests/test_config.py)
+- [x] Add --no-session-log flag to test_config_panel_* tests (tests/test_config.py)
+- [x] Add --no-session-log flag to test_tui_enabled_config_controls_no_tui (tests/test_config.py)
+- [x] Add --no-session-log flag to test_no_tui_flag_overrides_config (tests/test_config.py)
 
 ### Fix test_loop.py Tests
-- [ ] Add --no-session-log or session_logging=False to test_resume_* tests (tests/test_loop.py)
+- [x] Add --no-session-log or session_logging=False to test_resume_* tests (tests/test_loop.py)
 - [ ] Add --no-session-log or session_logging=False to test_fail_fast_* tests (tests/test_loop.py)
 
 ## Notes

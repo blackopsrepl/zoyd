@@ -352,6 +352,7 @@ class TestResume:
             progress_path=progress_file,
             resume=True,
             max_iterations=10,
+            session_logging=False,
         )
         exit_code = runner.run()
         assert exit_code == 0
@@ -370,6 +371,7 @@ class TestResume:
             progress_path=progress_file,
             resume=False,
             max_iterations=1,
+            session_logging=False,
         )
         exit_code = runner.run()
         assert exit_code == 0
