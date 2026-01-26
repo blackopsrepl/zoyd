@@ -162,6 +162,161 @@ class RedisAIProvider:
             return False
 
 
+class LocalOnnxProvider:
+    """Embedding provider using local ONNX Runtime inference.
+
+    Downloads and caches the all-MiniLM-L6-v2 ONNX model from
+    HuggingFace Hub, then runs inference locally with ``onnxruntime``.
+    Returns 384-dim vectors identical to ``RedisAIProvider``.
+
+    Requires:
+        - ``onnxruntime`` Python package
+        - ``tokenizers`` Python package
+        - Internet access on first run (to download model files)
+    """
+
+    # HuggingFace Hub URL pattern for raw file download
+    _HF_MODEL_URL = (
+        "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2"
+        "/resolve/main/onnx/model.onnx"
+    )
+
+    def __init__(self, cache_dir: str | None = None) -> None:
+        self._cache_dir = cache_dir
+        self._session: Any = None
+        self._tokenizer: Any = None
+
+    @property
+    def model_path(self) -> str:
+        """Return the path where the ONNX model is cached."""
+        import os
+
+        if self._cache_dir is not None:
+            base = self._cache_dir
+        else:
+            base = os.path.join(
+                os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache")),
+                "zoyd",
+                "models",
+            )
+        return os.path.join(base, "all-MiniLM-L6-v2.onnx")
+
+    def _download_model(self) -> str:
+        """Download the ONNX model if not already cached.
+
+        Returns:
+            The local file path to the ONNX model.
+        """
+        import os
+        import urllib.request
+
+        path = self.model_path
+        if os.path.isfile(path):
+            return path
+
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+
+        # Download to a temp file then rename for atomic write
+        tmp_path = path + ".tmp"
+        try:
+            urllib.request.urlretrieve(self._HF_MODEL_URL, tmp_path)
+            os.replace(tmp_path, path)
+        except Exception:
+            # Clean up partial download
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+            raise
+
+        return path
+
+    @property
+    def session(self) -> Any:
+        """Lazily create the ONNX Runtime inference session."""
+        if self._session is None:
+            import onnxruntime as ort
+
+            model_path = self._download_model()
+            self._session = ort.InferenceSession(
+                model_path,
+                providers=["CPUExecutionProvider"],
+            )
+        return self._session
+
+    @property
+    def tokenizer(self) -> Any:
+        """Lazily load the HuggingFace tokenizer."""
+        if self._tokenizer is None:
+            from tokenizers import Tokenizer
+
+            self._tokenizer = Tokenizer.from_pretrained(MODEL_NAME)
+            self._tokenizer.enable_truncation(max_length=MAX_LENGTH)
+            self._tokenizer.enable_padding(
+                length=MAX_LENGTH, pad_id=0, pad_token="[PAD]"
+            )
+        return self._tokenizer
+
+    def embed(self, text: str) -> list[float]:
+        """Tokenize text and run local ONNX inference.
+
+        Args:
+            text: The input text to embed.
+
+        Returns:
+            A 384-dimensional embedding vector.
+        """
+        import numpy as np
+
+        encoding = self.tokenizer.encode(text)
+        input_ids = encoding.ids
+        attention_mask = encoding.attention_mask
+
+        ids_array = np.array([input_ids], dtype=np.int64)
+        mask_array = np.array([attention_mask], dtype=np.int64)
+        token_type_ids = np.zeros_like(ids_array, dtype=np.int64)
+
+        outputs = self.session.run(
+            None,
+            {
+                "input_ids": ids_array,
+                "attention_mask": mask_array,
+                "token_type_ids": token_type_ids,
+            },
+        )
+
+        # outputs[0] has shape (1, seq_len, 384) — token embeddings
+        token_embeddings = outputs[0]  # (1, seq_len, 384)
+
+        # Mean pool using attention mask
+        mask_expanded = np.expand_dims(mask_array, axis=-1)  # (1, seq_len, 1)
+        masked = token_embeddings * mask_expanded
+        summed = masked.sum(axis=1)  # (1, 384)
+        mask_sum = mask_expanded.sum(axis=1).clip(min=1e-9)  # (1, 1)
+        pooled = summed / mask_sum  # (1, 384)
+
+        return pooled[0].tolist()
+
+    def dimension(self) -> int:
+        """Return 384 (all-MiniLM-L6-v2 output dimension)."""
+        return DIMENSION
+
+    def is_available(self) -> bool:
+        """Check that onnxruntime, tokenizers, and model are accessible."""
+        try:
+            import onnxruntime as _ort  # noqa: F401
+
+            _ = self.tokenizer
+            # Check if model is cached or downloadable
+            import os
+
+            if os.path.isfile(self.model_path):
+                return True
+            # Try downloading
+            self._download_model()
+            return True
+        except Exception:
+            return False
+
+
 def _int64_list_to_blob(values: list[int]) -> bytes:
     """Pack a list of ints into a little-endian INT64 blob."""
     return struct.pack(f"<{len(values)}q", *values)
