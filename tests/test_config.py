@@ -443,7 +443,8 @@ tui_compact = true
             Path("zoyd.toml").write_text('prd = "test.md"\ntui_enabled = false\n')
             Path("test.md").write_text("# Test\n- [ ] Task\n")
 
-            result = runner.invoke(cli, ["run", "--dry-run"])
+            # Use --no-session-log to avoid Redis connection attempts
+            result = runner.invoke(cli, ["run", "--dry-run", "--no-session-log"])
             # When TUI is disabled, we get plain text output (PlainDisplay)
             # PlainDisplay prints "Zoyd - Autonomous Loop" in __enter__
             assert "Zoyd - Autonomous Loop" in result.output
