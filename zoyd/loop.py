@@ -12,8 +12,10 @@ from pathlib import Path
 
 from . import prd, progress
 from .config import load_config
+from .session.embedding import get_provider
 from .session.logger import SessionLogger
 from .session.storage import create_storage
+from .session.vectors import VectorMemory
 from .tui.console import create_console
 from .tui.events import EventEmitter, EventType
 from .tui.live import (
@@ -467,6 +469,9 @@ class LoopRunner:
         redis_port: int | None = None,
         redis_db: int | None = None,
         redis_password: str | None = None,
+        vector_memory: bool | None = None,
+        vector_top_k: int | None = None,
+        vector_recent_n: int | None = None,
     ):
         # Load config for resolving None sentinels
         cfg = load_config()
@@ -492,6 +497,10 @@ class LoopRunner:
         self.redis_port = redis_port if redis_port is not None else cfg.redis_port
         self.redis_db = redis_db if redis_db is not None else cfg.redis_db
         self.redis_password = redis_password if redis_password is not None else cfg.redis_password
+        # Vector memory options
+        self.vector_memory_enabled = vector_memory if vector_memory is not None else cfg.vector_memory
+        self.vector_top_k = vector_top_k if vector_top_k is not None else cfg.vector_top_k
+        self.vector_recent_n = vector_recent_n if vector_recent_n is not None else cfg.vector_recent_n
         # Create display for output (TUI or plain depending on settings)
         if not self.tui_enabled:
             self.live: LiveDisplay | PlainDisplay = create_plain_display(
@@ -540,6 +549,24 @@ class LoopRunner:
             )
             self.session_logger = SessionLogger(storage=storage)
             self.session_logger.subscribe_to(self.events)
+        # Vector memory for semantic retrieval
+        # Skip in dry-run mode (no point connecting to Redis for a dry run)
+        self.vector_mem: VectorMemory | None = None
+        if self.vector_memory_enabled and not self.dry_run:
+            provider = get_provider(
+                host=self.redis_host,
+                port=self.redis_port,
+                db=self.redis_db,
+                password=self.redis_password,
+            )
+            if provider.is_available():
+                self.vector_mem = VectorMemory(
+                    provider=provider,
+                    host=self.redis_host,
+                    port=self.redis_port,
+                    db=self.redis_db,
+                    password=self.redis_password,
+                )
 
     def get_backoff_delay(self) -> float:
         """Calculate exponential backoff delay based on consecutive failures.
