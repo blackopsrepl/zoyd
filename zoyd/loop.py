@@ -864,6 +864,15 @@ class LoopRunner:
                         self.live.log_error(f"Claude returned error (code {return_code})")
                         self.live.log_lines(output)
 
+                        # Store error in vector memory for pattern matching
+                        if self.vector_mem is not None:
+                            self.vector_mem.store_error(
+                                session_id=self.vector_session_id,
+                                iteration=iteration,
+                                output=output,
+                                task_text=next_task.text if next_task else "",
+                            )
+
                         # Fail-fast: exit immediately on first failure
                         if self.fail_fast:
                             self.live.log_error("Fail-fast mode: exiting on first failure")
