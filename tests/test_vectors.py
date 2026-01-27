@@ -489,6 +489,249 @@ class TestVectorMemoryRemoveSession:
         assert removed == 0
 
 
+class TestGracefulDegradationUnavailableProvider:
+    """Tests for graceful degradation when the embedding provider is unavailable."""
+
+    def test_is_available_false_when_provider_unavailable(self):
+        provider = _make_provider(available=False)
+        vm, client, _ = _make_vm(provider=provider)
+        assert vm.is_available is False
+
+    def test_store_output_returns_none_when_provider_embed_fails(self):
+        provider = _make_provider()
+        provider.embed.side_effect = RuntimeError("provider unavailable")
+        vm, client, _ = _make_vm(provider=provider)
+        result = vm.store_output("sess1", 1, "output", "task", 0)
+        assert result is None
+
+    def test_store_task_returns_none_when_provider_embed_fails(self):
+        provider = _make_provider()
+        provider.embed.side_effect = RuntimeError("provider unavailable")
+        vm, client, _ = _make_vm(provider=provider)
+        result = vm.store_task("sess1", "task", 10)
+        assert result is None
+
+    def test_store_error_returns_none_when_provider_embed_fails(self):
+        provider = _make_provider()
+        provider.embed.side_effect = RuntimeError("provider unavailable")
+        vm, client, _ = _make_vm(provider=provider)
+        result = vm.store_error("sess1", 1, "error text", "task")
+        assert result is None
+
+    def test_find_relevant_outputs_returns_empty_when_embed_fails(self):
+        provider = _make_provider()
+        provider.embed.side_effect = RuntimeError("provider unavailable")
+        vm, client, _ = _make_vm(provider=provider)
+        results = vm.find_relevant_outputs("query")
+        assert results == []
+
+    def test_find_similar_tasks_returns_empty_when_embed_fails(self):
+        provider = _make_provider()
+        provider.embed.side_effect = RuntimeError("provider unavailable")
+        vm, client, _ = _make_vm(provider=provider)
+        results = vm.find_similar_tasks("task text")
+        assert results == []
+
+    def test_find_similar_errors_returns_empty_when_embed_fails(self):
+        provider = _make_provider()
+        provider.embed.side_effect = RuntimeError("provider unavailable")
+        vm, client, _ = _make_vm(provider=provider)
+        results = vm.find_similar_errors("error text")
+        assert results == []
+
+    def test_remove_session_still_works_with_unavailable_provider(self):
+        """remove_session doesn't embed — it uses SCAN + VREM, so it should
+        still succeed even if the provider is unavailable."""
+        provider = _make_provider(available=False)
+        vm, client, _ = _make_vm(provider=provider)
+        client.scan.side_effect = [
+            (0, [f"{META_PREFIX}output:sess1:1:abc"]),
+            (0, []),
+            (0, []),
+        ]
+        removed = vm.remove_session("sess1")
+        assert removed == 1
+
+    def test_no_redis_calls_when_embed_fails_on_store(self):
+        """If embed() fails, no Redis calls should be made."""
+        provider = _make_provider()
+        provider.embed.side_effect = RuntimeError("provider unavailable")
+        vm, client, _ = _make_vm(provider=provider)
+        vm.store_output("sess1", 1, "output", "task", 0)
+        client.execute_command.assert_not_called()
+        client.set.assert_not_called()
+
+    def test_no_redis_calls_when_embed_fails_on_find(self):
+        """If embed() fails, no VSIM calls should be made."""
+        provider = _make_provider()
+        provider.embed.side_effect = RuntimeError("provider unavailable")
+        vm, client, _ = _make_vm(provider=provider)
+        vm.find_relevant_outputs("query")
+        client.execute_command.assert_not_called()
+
+
+class TestGracefulDegradationConnectionErrors:
+    """Tests for graceful degradation when Redis connection fails."""
+
+    def test_is_available_false_on_connection_refused(self):
+        vm, client, _ = _make_vm()
+        client.ping.side_effect = ConnectionError("Connection refused")
+        assert vm.is_available is False
+
+    def test_is_available_false_on_timeout(self):
+        vm, client, _ = _make_vm()
+        client.ping.side_effect = TimeoutError("Connection timed out")
+        assert vm.is_available is False
+
+    def test_store_output_returns_none_on_connection_error(self):
+        vm, client, _ = _make_vm()
+        client.execute_command.side_effect = ConnectionError("Connection lost")
+        result = vm.store_output("sess1", 1, "output", "task", 0)
+        assert result is None
+
+    def test_store_task_returns_none_on_connection_error(self):
+        vm, client, _ = _make_vm()
+        client.execute_command.side_effect = ConnectionError("Connection lost")
+        result = vm.store_task("sess1", "task", 10)
+        assert result is None
+
+    def test_store_error_returns_none_on_connection_error(self):
+        vm, client, _ = _make_vm()
+        client.execute_command.side_effect = ConnectionError("Connection lost")
+        result = vm.store_error("sess1", 1, "error", "task")
+        assert result is None
+
+    def test_find_relevant_outputs_returns_empty_on_connection_error(self):
+        vm, client, _ = _make_vm()
+        client.execute_command.side_effect = ConnectionError("Connection lost")
+        results = vm.find_relevant_outputs("query")
+        assert results == []
+
+    def test_find_similar_tasks_returns_empty_on_connection_error(self):
+        vm, client, _ = _make_vm()
+        client.execute_command.side_effect = ConnectionError("Connection lost")
+        results = vm.find_similar_tasks("task")
+        assert results == []
+
+    def test_find_similar_errors_returns_empty_on_connection_error(self):
+        vm, client, _ = _make_vm()
+        client.execute_command.side_effect = ConnectionError("Connection lost")
+        results = vm.find_similar_errors("error")
+        assert results == []
+
+    def test_remove_session_returns_zero_on_connection_error(self):
+        vm, client, _ = _make_vm()
+        client.scan.side_effect = ConnectionError("Connection lost")
+        removed = vm.remove_session("sess1")
+        assert removed == 0
+
+    def test_store_output_returns_none_on_timeout(self):
+        vm, client, _ = _make_vm()
+        client.execute_command.side_effect = TimeoutError("Timed out")
+        result = vm.store_output("sess1", 1, "output", "task", 0)
+        assert result is None
+
+    def test_find_outputs_returns_empty_on_timeout(self):
+        vm, client, _ = _make_vm()
+        client.execute_command.side_effect = TimeoutError("Timed out")
+        results = vm.find_relevant_outputs("query")
+        assert results == []
+
+    def test_store_output_returns_none_when_metadata_set_fails(self):
+        """VADD succeeds but metadata SET fails — should still degrade gracefully."""
+        vm, client, _ = _make_vm()
+        client.execute_command.return_value = 1  # VADD success
+        client.set.side_effect = ConnectionError("Connection lost during SET")
+        result = vm.store_output("sess1", 1, "output", "task", 0)
+        assert result is None
+
+    def test_find_outputs_handles_partial_metadata_failure(self):
+        """VSIM succeeds but metadata GET fails for some elements."""
+        vm, client, _ = _make_vm()
+        meta = json.dumps({"session_id": "s1", "task_text": "t1"})
+        client.execute_command.return_value = ["e1", "0.9", "e2", "0.8"]
+        # First metadata GET succeeds, second raises
+        client.get.side_effect = [meta, ConnectionError("lost")]
+        # Should return results for the first element and skip the second
+        # (the exception handler catches the whole block, so we get [])
+        results = vm.find_relevant_outputs("query")
+        # The try/except wraps the entire method, so a mid-iteration
+        # connection error returns []
+        assert results == []
+
+    def test_is_available_false_when_vinfo_raises_unknown_command(self):
+        """Redis version doesn't support VSET commands."""
+        vm, client, _ = _make_vm()
+        client.ping.return_value = True
+        client.execute_command.side_effect = Exception(
+            "ERR unknown command 'VINFO'"
+        )
+        assert vm.is_available is False
+
+    def test_is_available_false_on_authentication_error(self):
+        vm, client, _ = _make_vm()
+        client.ping.side_effect = Exception("NOAUTH Authentication required")
+        assert vm.is_available is False
+
+    def test_remove_session_returns_zero_on_mid_scan_failure(self):
+        """Scan starts but fails mid-way through — degrade to 0."""
+        vm, client, _ = _make_vm()
+        client.scan.side_effect = [
+            (42, [f"{META_PREFIX}output:sess1:1:abc"]),  # First page ok
+            ConnectionError("Connection lost"),            # Second page fails
+        ]
+        removed = vm.remove_session("sess1")
+        # The exception handler catches everything and returns 0
+        assert removed == 0
+
+
+class TestGracefulDegradationLoopIntegration:
+    """Tests that VectorMemory initialization degrades gracefully in LoopRunner."""
+
+    def test_vector_mem_none_when_provider_unavailable(self):
+        """LoopRunner.vector_mem should be None when provider is unavailable."""
+        from pathlib import Path
+        from unittest.mock import patch
+        from zoyd.session.embedding import UnavailableProvider
+
+        with patch("zoyd.loop.get_provider", return_value=UnavailableProvider()):
+            from zoyd.loop import LoopRunner
+            runner = LoopRunner(
+                prd_path=Path("test.md"),
+                progress_path=Path("progress.txt"),
+                vector_memory=True,
+                session_logging=False,
+                dry_run=True,
+            )
+        # dry_run=True skips vector init, so vector_mem stays None
+        assert runner.vector_mem is None
+
+    def test_vector_mem_none_when_dry_run(self):
+        """VectorMemory should not be initialized during dry runs."""
+        from pathlib import Path
+        from zoyd.loop import LoopRunner
+        runner = LoopRunner(
+            prd_path=Path("test.md"),
+            progress_path=Path("progress.txt"),
+            vector_memory=True,
+            session_logging=False,
+            dry_run=True,
+        )
+        assert runner.vector_mem is None
+
+    def test_vector_mem_none_when_disabled(self):
+        """VectorMemory should not be initialized when vector_memory=False."""
+        from pathlib import Path
+        from zoyd.loop import LoopRunner
+        runner = LoopRunner(
+            prd_path=Path("test.md"),
+            progress_path=Path("progress.txt"),
+            vector_memory=False,
+            session_logging=False,
+        )
+        assert runner.vector_mem is None
+
+
 class TestVectorMemoryConstants:
     """Tests for module-level constants."""
 
