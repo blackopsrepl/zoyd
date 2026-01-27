@@ -746,14 +746,35 @@ class LoopRunner:
                         self.live.log(f"Next task: {next_task.text}")
 
                     # Build prompt
-                    prompt = build_prompt(
-                        prd_content=prd_content,
-                        progress_content=progress_content,
-                        iteration=iteration,
-                        completed=completed,
-                        total=total,
-                        current_task=next_task.text if next_task else "(No incomplete tasks)",
-                    )
+                    current_task_text = next_task.text if next_task else "(No incomplete tasks)"
+                    if self.vector_mem is not None and self.vector_mem.is_available:
+                        # Use vector memory for semantic retrieval
+                        results = self.vector_mem.find_relevant_outputs(
+                            query_text=current_task_text,
+                            count=self.vector_top_k,
+                        )
+                        relevant_context = _format_relevant_context(results)
+                        recent_progress = _extract_recent_iterations(
+                            progress_content, self.vector_recent_n
+                        )
+                        prompt = build_prompt_with_memory(
+                            prd_content=prd_content,
+                            relevant_context=relevant_context,
+                            recent_progress=recent_progress,
+                            iteration=iteration,
+                            completed=completed,
+                            total=total,
+                            current_task=current_task_text,
+                        )
+                    else:
+                        prompt = build_prompt(
+                            prd_content=prd_content,
+                            progress_content=progress_content,
+                            iteration=iteration,
+                            completed=completed,
+                            total=total,
+                            current_task=current_task_text,
+                        )
 
                     if self.dry_run:
                         self.live.log("--- DRY RUN: Would send prompt ---")
