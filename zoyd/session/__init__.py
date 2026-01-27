@@ -38,6 +38,8 @@ from zoyd.session.models import (
     SessionStatistics,
     TaskTransition,
 )
+from zoyd.session.embedding import EmbeddingProvider
+from zoyd.session.vectors import VectorMemory
 from zoyd.session.storage import (
     FileStorage,
     InMemoryStorage,
@@ -70,6 +72,9 @@ __all__ = [
     "GitCommitRecord",
     "SessionStatistics",
     "Session",
+    # Vector memory
+    "VectorMemory",
+    "EmbeddingProvider",
     # Serialization helpers
     "to_json",
     "from_json",
