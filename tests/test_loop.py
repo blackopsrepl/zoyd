@@ -754,10 +754,11 @@ class TestAutoCommit:
         assert runner.auto_commit is False
 
     def test_commit_system_prompt_no_coauthor(self):
-        """Test that commit system prompt explicitly forbids signature lines."""
+        """Test that commit system prompt explicitly forbids signature lines and backticks."""
         assert "Co-Authored-By" in COMMIT_SYSTEM_PROMPT
         assert "Signed-off-by" in COMMIT_SYSTEM_PROMPT
         assert "Never" in COMMIT_SYSTEM_PROMPT
+        assert "backtick" in COMMIT_SYSTEM_PROMPT.lower()
 
     @patch("zoyd.loop.subprocess.run")
     def test_commit_changes_success(self, mock_run):
@@ -833,6 +834,32 @@ class TestAutoCommit:
         mock_invoke.assert_called_once()
         _, kwargs = mock_invoke.call_args
         assert kwargs.get("sandbox") is False
+
+    @patch("zoyd.loop.invoke_claude")
+    def test_generate_commit_message_strips_backticks(self, mock_invoke):
+        """Test that code block fences are stripped from generated messages."""
+        mock_invoke.return_value = (
+            0,
+            "```\nfeat(cli): add --json flag\n\nAdded JSON output support\n```",
+            None,
+        )
+
+        result = generate_commit_message("Made changes", "Add JSON flag")
+        assert result == "feat(cli): add --json flag\n\nAdded JSON output support"
+        assert "```" not in result
+
+    @patch("zoyd.loop.invoke_claude")
+    def test_generate_commit_message_strips_inline_backticks(self, mock_invoke):
+        """Test that inline backticks are stripped from generated messages."""
+        mock_invoke.return_value = (
+            0,
+            "fix(parser): handle `None` values in `parse_config`",
+            None,
+        )
+
+        result = generate_commit_message("Fixed parser", "Fix parser")
+        assert result == "fix(parser): handle None values in parse_config"
+        assert "`" not in result
 
 
 class TestResume:

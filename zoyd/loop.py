@@ -103,7 +103,8 @@ Types: feat, fix, docs, style, refactor, test, chore, perf, ci, build, revert.
 Subject line: type(scope): description (72 chars max, lowercase).
 Scope is optional but encouraged (e.g., feat(cli): add --json flag).
 Body is optional, separated by blank line, explains why not what.
-Never add Co-Authored-By, Signed-off-by, or any signature lines to commits."""
+Never add Co-Authored-By, Signed-off-by, or any signature lines to commits.
+Never use backticks, code blocks, or any markdown formatting in commit messages."""
 
 
 def detect_cannot_complete(output: str) -> tuple[bool, str | None]:
@@ -292,6 +293,9 @@ def generate_commit_message(iteration_output: str, task_text: str, model: str | 
         line for line in lines
         if not any(sig in line.lower() for sig in ["co-author", "signed-off", "co-authored"])
     ]
+    # Strip code block fences (``` or ```lang) and inline backticks
+    clean_lines = [line for line in clean_lines if not re.match(r"^```\w*$", line.strip())]
+    clean_lines = [line.replace("`", "") for line in clean_lines]
     return "\n".join(clean_lines).strip() or None
 
 
