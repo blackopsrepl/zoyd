@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import uuid
 from pathlib import Path
 
 from . import prd, progress
@@ -648,6 +649,9 @@ class LoopRunner:
                 fail_fast=self.fail_fast,
             )
 
+        # Generate a session ID for vector memory (shared across all iterations)
+        self.vector_session_id = uuid.uuid4().hex
+
         # Emit LOOP_START event
         self.events.emit(EventType.LOOP_START, {
             "prd_path": str(self.prd_path),
@@ -899,6 +903,16 @@ class LoopRunner:
                         self.stats_successes += 1
                         self.stats_iterations += 1
                         self.live.log_lines(output)
+
+                        # Store output in vector memory for semantic retrieval
+                        if self.vector_mem is not None:
+                            self.vector_mem.store_output(
+                                session_id=self.vector_session_id,
+                                iteration=iteration,
+                                output=output,
+                                task_text=next_task.text if next_task else "",
+                                return_code=return_code,
+                            )
 
                         # Check if Claude indicated it cannot complete the task
                         cannot_complete, reason = detect_cannot_complete(output)
