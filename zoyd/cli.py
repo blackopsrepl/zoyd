@@ -136,6 +136,17 @@ def cli():
     default=None,
     help="Redis password (default: none)",
 )
+@click.option(
+    "--vector-memory/--no-vector-memory",
+    default=None,
+    help="Enable/disable vector semantic memory (default: disabled)",
+)
+@click.option(
+    "--vector-top-k",
+    default=None,
+    type=int,
+    help="Number of relevant results to retrieve from vector memory (default: 5)",
+)
 @click.pass_context
 def run(
     ctx: click.Context,
@@ -158,6 +169,8 @@ def run(
     redis_port: int | None,
     redis_db: int | None,
     redis_password: str | None,
+    vector_memory: bool | None,
+    vector_top_k: int | None,
 ):
     """Run the Zoyd loop against a PRD file.
 
@@ -227,6 +240,8 @@ def run(
         redis_port=redis_port,
         redis_db=redis_db,
         redis_password=redis_password,
+        vector_memory=vector_memory,
+        vector_top_k=vector_top_k,
     )
 
     exit_code = runner.run()
