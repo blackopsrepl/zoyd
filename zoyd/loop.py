@@ -749,6 +749,16 @@ class LoopRunner:
                         self.live.set_task(next_task.text)
                         self.live.log(f"Next task: {next_task.text}")
 
+                    # Store incomplete task embeddings for vector memory
+                    if self.vector_mem is not None:
+                        for task in tasks:
+                            if not task.complete:
+                                self.vector_mem.store_task(
+                                    session_id=self.vector_session_id,
+                                    task_text=task.text,
+                                    line_number=task.line_number,
+                                )
+
                     # Build prompt
                     current_task_text = next_task.text if next_task else "(No incomplete tasks)"
                     if self.vector_mem is not None and self.vector_mem.is_available:
