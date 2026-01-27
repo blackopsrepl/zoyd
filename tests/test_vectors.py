@@ -128,11 +128,12 @@ class TestVectorMemoryStoreOutput:
         vadd_call = client.execute_command.call_args
         assert vadd_call[0][0] == "VADD"
         assert vadd_call[0][1] == OUTPUTS_KEY
-        assert vadd_call[0][2] == "FP32"
-        # element_id is arg 3
-        assert vadd_call[0][3].startswith("output:sess1:1:")
+        assert vadd_call[0][2] == "VALUES"
+        assert vadd_call[0][3] == 3  # vector length
         # vector values follow
-        assert vadd_call[0][4:] == (0.5, 0.6, 0.7)
+        assert vadd_call[0][4:7] == (0.5, 0.6, 0.7)
+        # element_id is the last argument
+        assert vadd_call[0][7].startswith("output:sess1:1:")
 
     def test_store_output_stores_metadata(self):
         vm, client, provider = _make_vm()
@@ -292,8 +293,8 @@ class TestVectorMemoryFindRelevantOutputs:
         client.execute_command.return_value = []
         vm.find_relevant_outputs("query", count=5, exclude_session="sess")
         vsim_call = client.execute_command.call_args
-        # count + 10 = 15
-        assert vsim_call[0][3] == 15
+        # COUNT arg is at the end: ...WITHSCORES COUNT 15
+        assert vsim_call[0][-1] == 15
 
     def test_returns_empty_on_no_results(self):
         vm, client, provider = _make_vm()
@@ -394,7 +395,8 @@ class TestVectorMemoryFindSimilarErrors:
         client.execute_command.return_value = []
         vm.find_similar_errors("error")
         vsim_call = client.execute_command.call_args
-        assert vsim_call[0][3] == 3
+        # COUNT arg is at the end: ...WITHSCORES COUNT 3
+        assert vsim_call[0][-1] == 3
 
     def test_no_exclude_session_parameter(self):
         """find_similar_errors has no exclude_session — cross-session by design."""

@@ -131,9 +131,9 @@ class VectorMemory:
             element_id = f"output:{session_id}:{iteration}:{uuid.uuid4().hex[:8]}"
             vector = self.provider.embed(output)
 
-            # VADD key FP32 element_id V1 V2 ... Vn
+            # VADD key VALUES num V1 V2 ... Vn element_id
             self.client.execute_command(
-                "VADD", OUTPUTS_KEY, "FP32", element_id, *vector,
+                "VADD", OUTPUTS_KEY, "VALUES", len(vector), *vector, element_id,
             )
 
             # Store metadata as JSON at a separate key
@@ -179,9 +179,9 @@ class VectorMemory:
             element_id = f"error:{session_id}:{iteration}:{uuid.uuid4().hex[:8]}"
             vector = self.provider.embed(output)
 
-            # VADD key FP32 element_id V1 V2 ... Vn
+            # VADD key VALUES num V1 V2 ... Vn element_id
             self.client.execute_command(
-                "VADD", ERRORS_KEY, "FP32", element_id, *vector,
+                "VADD", ERRORS_KEY, "VALUES", len(vector), *vector, element_id,
             )
 
             # Store metadata as JSON at a separate key
@@ -228,9 +228,10 @@ class VectorMemory:
             # still return up to ``count`` after filtering.
             fetch_count = count + 10 if exclude_session else count
 
-            # VSIM key FP32 count V1 V2 ... Vn  WITHSCORES
+            # VSIM key VALUES num V1 V2 ... Vn WITHSCORES COUNT num
             raw = self.client.execute_command(
-                "VSIM", OUTPUTS_KEY, "FP32", fetch_count, *vector, "WITHSCORES",
+                "VSIM", OUTPUTS_KEY, "VALUES", len(vector), *vector,
+                "WITHSCORES", "COUNT", fetch_count,
             )
 
             # ``raw`` is a flat list: [element_id, score, element_id, score, ...]
@@ -287,9 +288,10 @@ class VectorMemory:
             # still return up to ``count`` after filtering.
             fetch_count = count + 10 if exclude_session else count
 
-            # VSIM key FP32 count V1 V2 ... Vn  WITHSCORES
+            # VSIM key VALUES num V1 V2 ... Vn WITHSCORES COUNT num
             raw = self.client.execute_command(
-                "VSIM", TASKS_KEY, "FP32", fetch_count, *vector, "WITHSCORES",
+                "VSIM", TASKS_KEY, "VALUES", len(vector), *vector,
+                "WITHSCORES", "COUNT", fetch_count,
             )
 
             # ``raw`` is a flat list: [element_id, score, element_id, score, ...]
@@ -340,9 +342,10 @@ class VectorMemory:
         try:
             vector = self.provider.embed(error_text)
 
-            # VSIM key FP32 count V1 V2 ... Vn  WITHSCORES
+            # VSIM key VALUES num V1 V2 ... Vn WITHSCORES COUNT num
             raw = self.client.execute_command(
-                "VSIM", ERRORS_KEY, "FP32", count, *vector, "WITHSCORES",
+                "VSIM", ERRORS_KEY, "VALUES", len(vector), *vector,
+                "WITHSCORES", "COUNT", count,
             )
 
             # ``raw`` is a flat list: [element_id, score, element_id, score, ...]
@@ -448,9 +451,9 @@ class VectorMemory:
             element_id = f"task:{session_id}:{line_number}:{uuid.uuid4().hex[:8]}"
             vector = self.provider.embed(task_text)
 
-            # VADD key FP32 element_id V1 V2 ... Vn
+            # VADD key VALUES num V1 V2 ... Vn element_id
             self.client.execute_command(
-                "VADD", TASKS_KEY, "FP32", element_id, *vector,
+                "VADD", TASKS_KEY, "VALUES", len(vector), *vector, element_id,
             )
 
             # Store metadata as JSON at a separate key
