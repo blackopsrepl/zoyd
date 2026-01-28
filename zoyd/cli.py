@@ -147,6 +147,11 @@ def cli():
     type=int,
     help="Number of relevant results to retrieve from vector memory (default: 5)",
 )
+@click.option(
+    "--rabid",
+    is_flag=True,
+    help="Disable sandbox (allows unrestricted bash)",
+)
 @click.pass_context
 def run(
     ctx: click.Context,
@@ -171,6 +176,7 @@ def run(
     redis_password: str | None,
     vector_memory: bool | None,
     vector_top_k: int | None,
+    rabid: bool,
 ):
     """Run the Zoyd loop against a PRD file.
 
@@ -242,6 +248,8 @@ def run(
         redis_password=redis_password,
         vector_memory=vector_memory,
         vector_top_k=vector_top_k,
+        sandbox=not rabid,
+        rabid=rabid,
     )
 
     exit_code = runner.run()

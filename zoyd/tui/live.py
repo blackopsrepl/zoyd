@@ -19,7 +19,7 @@ from rich.panel import Panel
 from rich.text import Text
 
 from zoyd import __version__
-from zoyd.tui.banner import get_versioned_banner
+from zoyd.tui.banner import get_versioned_banner, render_banner_styled
 from zoyd.tui.keyboard import Key, KeyboardListener, KeyEvent
 from zoyd.tui.panels import create_status_bar
 from zoyd.tui.spinners import MindFlayerSpinner
@@ -55,6 +55,7 @@ class LiveDisplay:
         max_cost: float | None = None,
         max_log_lines: int = 20,
         refresh_per_second: int = 4,
+        rabid: bool = False,
     ) -> None:
         """Initialize the live display.
 
@@ -67,6 +68,7 @@ class LiveDisplay:
             max_cost: Maximum cost limit in USD.
             max_log_lines: Maximum number of log lines to show.
             refresh_per_second: How often to refresh the display.
+            rabid: If True, apply Sauron eye styling to the banner.
         """
         self.console = console
         self.prd_path = prd_path
@@ -76,6 +78,7 @@ class LiveDisplay:
         self.max_cost = max_cost
         self.max_log_lines = max_log_lines
         self.refresh_per_second = refresh_per_second
+        self.rabid = rabid
 
         # State
         self._iteration = 0
@@ -245,18 +248,14 @@ class LiveDisplay:
     def _render_banner(self) -> RenderableType:
         """Render the ZOYD ASCII art banner with mind flayer art and version.
 
-        Uses ``get_versioned_banner(__version__)`` to include the version
-        string below the second box in the banner.
+        Uses ``render_banner_styled(__version__, rabid=self.rabid)`` to include
+        the version string below the second box in the banner and optionally
+        apply Sauron eye styling in rabid mode.
 
         Returns:
             Rich renderable for the banner panel.
         """
-        versioned = get_versioned_banner(__version__)
-        lines = versioned.strip().split("\n")
-        banner_text = Text()
-        for i, line in enumerate(lines):
-            suffix = "\n" if i < len(lines) - 1 else ""
-            banner_text.append(line + suffix, style=f"bold {COLORS['psionic']}")
+        banner_text = render_banner_styled(__version__, rabid=self.rabid)
 
         return Panel(
             banner_text,
@@ -556,6 +555,7 @@ class PlainDisplay:
         max_iterations: int = 10,
         model: str | None = None,
         max_cost: float | None = None,
+        rabid: bool = False,
         **kwargs,  # Ignore extra args like max_log_lines
     ) -> None:
         """Initialize the plain display.
@@ -566,12 +566,14 @@ class PlainDisplay:
             max_iterations: Maximum iterations allowed.
             model: Claude model being used.
             max_cost: Maximum cost limit in USD.
+            rabid: If True, rabid mode is active (for API compatibility).
         """
         self.prd_path = prd_path
         self.progress_path = progress_path
         self.max_iterations = max_iterations
         self.model = model
         self.max_cost = max_cost
+        self.rabid = rabid
 
         # State (same as LiveDisplay for API compatibility)
         self._iteration = 0
@@ -736,6 +738,7 @@ def create_live_display(
     max_cost: float | None = None,
     max_log_lines: int = 20,
     refresh_per_second: int = 4,
+    rabid: bool = False,
 ) -> LiveDisplay:
     """Create a live display instance.
 
@@ -750,6 +753,7 @@ def create_live_display(
         max_cost: Maximum cost limit in USD.
         max_log_lines: Maximum number of log lines to show.
         refresh_per_second: How often to refresh the display.
+        rabid: If True, apply Sauron eye styling to the banner.
 
     Returns:
         A configured LiveDisplay instance.
@@ -763,6 +767,7 @@ def create_live_display(
         max_cost=max_cost,
         max_log_lines=max_log_lines,
         refresh_per_second=refresh_per_second,
+        rabid=rabid,
     )
 
 
@@ -773,6 +778,7 @@ def create_plain_display(
     max_iterations: int = 10,
     model: str | None = None,
     max_cost: float | None = None,
+    rabid: bool = False,
 ) -> PlainDisplay:
     """Create a plain display instance.
 
@@ -784,6 +790,7 @@ def create_plain_display(
         max_iterations: Maximum iterations allowed.
         model: Claude model being used.
         max_cost: Maximum cost limit in USD.
+        rabid: If True, rabid mode is active (for API compatibility).
 
     Returns:
         A configured PlainDisplay instance.
@@ -794,6 +801,7 @@ def create_plain_display(
         max_iterations=max_iterations,
         model=model,
         max_cost=max_cost,
+        rabid=rabid,
     )
 
 

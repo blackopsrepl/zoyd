@@ -32,6 +32,12 @@ COLORS = {
     "active": "#b967ff",  # Psionic purple - in progress
     "complete": "#7c9a6e",  # Success green - done
     "blocked": "#8b4513",  # Brown - blocked tasks
+    # Rabid mode - Eye of Sauron palette
+    "sauron_outer": "#8b0000",  # Dark red - outer glow
+    "sauron_mid": "#ff4500",  # Orange-red - middle ring
+    "sauron_inner": "#ff6600",  # Bright orange - inner fire
+    "sauron_core": "#ffcc00",  # Yellow - hot center
+    "sauron_slit": "#1a0a0a",  # Near-black - pupil slit
 }
 
 # Rich Style objects for common uses

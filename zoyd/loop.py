@@ -477,6 +477,8 @@ class LoopRunner:
         vector_memory: bool | None = None,
         vector_top_k: int | None = None,
         vector_recent_n: int | None = None,
+        sandbox: bool = True,
+        rabid: bool = False,
     ):
         # Load config for resolving None sentinels
         cfg = load_config()
@@ -506,6 +508,8 @@ class LoopRunner:
         self.vector_memory_enabled = vector_memory if vector_memory is not None else cfg.vector_memory
         self.vector_top_k = vector_top_k if vector_top_k is not None else cfg.vector_top_k
         self.vector_recent_n = vector_recent_n if vector_recent_n is not None else cfg.vector_recent_n
+        self.sandbox = sandbox
+        self.rabid = rabid
         # Create display for output (TUI or plain depending on settings)
         if not self.tui_enabled:
             self.live: LiveDisplay | PlainDisplay = create_plain_display(
@@ -514,6 +518,7 @@ class LoopRunner:
                 max_iterations=self.max_iterations,
                 model=self.model,
                 max_cost=self.max_cost,
+                rabid=self.rabid,
             )
         else:
             self.live = create_live_display(
@@ -524,6 +529,7 @@ class LoopRunner:
                 model=self.model,
                 max_cost=self.max_cost,
                 refresh_per_second=int(self.tui_refresh_rate),
+                rabid=self.rabid,
             )
         self.consecutive_failures = 0
         self.max_consecutive_failures = 3
@@ -815,7 +821,7 @@ class LoopRunner:
 
                     track_cost = self.max_cost is not None
                     return_code, output, cost_usd = invoke_claude(
-                        prompt, self.model, track_cost=track_cost
+                        prompt, self.model, track_cost=track_cost, sandbox=self.sandbox
                     )
                     self.live.stop_spinner()
 
