@@ -376,16 +376,19 @@ def invoke_claude(
     # Claude expects --settings to be a file path, not inline JSON
     if sandbox:
         sandbox_settings = {"sandbox": {"enabled": True, "autoAllowBashIfSandboxed": True}}
-    else:
-        sandbox_settings = {"sandbox": {"enabled": False}}
-
-    # Create a temp file for settings
-    settings_fd, settings_path = tempfile.mkstemp(suffix=".json", prefix="zoyd_settings_")
-    try:
+        # Create a temp file for settings
+        settings_fd, settings_path = tempfile.mkstemp(suffix=".json", prefix="zoyd_settings_")
         with open(settings_fd, "w") as f:
             json_module.dump(sandbox_settings, f)
+        cmd = ["claude", "--print", "--permission-mode", "acceptEdits",
+               "--disallowedTools", "Bash(git *)", "--settings", settings_path]
+    else:
+        # Rabid mode: bypass all permissions (no sandbox)
+        settings_path = None
+        cmd = ["claude", "--print", "--dangerously-skip-permissions",
+               "--disallowedTools", "Bash(git *)"]
 
-        cmd = ["claude", "--print", "--permission-mode", "acceptEdits", "--disallowedTools", "Bash(git *)", "--settings", settings_path]
+    try:
 
         if model:
             cmd.extend(["--model", model])
@@ -428,8 +431,9 @@ def invoke_claude(
     except Exception as e:
         return 1, f"Error invoking Claude: {e}", None
     finally:
-        # Clean up temp file
-        Path(settings_path).unlink(missing_ok=True)
+        # Clean up temp file (only exists when sandbox=True)
+        if settings_path:
+            Path(settings_path).unlink(missing_ok=True)
 
 
 def format_duration(seconds: float) -> str:
@@ -807,10 +811,11 @@ class LoopRunner:
                         iteration += 1
                         continue
 
-                    # Invoke Claude in sandbox mode with spinner
+                    # Invoke Claude with spinner
                     self.live.start_spinner("Invoking Claude...")
                     if self.verbose:
-                        self.live.log("[zoyd] Invoking Claude in sandbox mode...", style="dim")
+                        mode = "sandbox" if self.sandbox else "rabid"
+                        self.live.log(f"[zoyd] Invoking Claude in {mode} mode...", style="dim")
 
                     # Emit CLAUDE_INVOKE event
                     self.events.emit(EventType.CLAUDE_INVOKE, {

@@ -1046,33 +1046,25 @@ class TestSandboxMode:
             assert settings["sandbox"]["enabled"] is True
 
     def test_sandbox_disabled_when_false(self):
-        """Test that invoke_claude(sandbox=False) sets enabled=False and omits autoAllowBashIfSandboxed."""
-        import json
+        """Test that invoke_claude(sandbox=False) uses --dangerously-skip-permissions instead of settings file."""
         from zoyd.loop import invoke_claude
 
-        settings_file_content = None
+        captured_cmd = None
 
-        def capture_settings(*args, **kwargs):
-            nonlocal settings_file_content
-            cmd = kwargs.get("args") or args[0]
-            if "--settings" in cmd:
-                settings_idx = cmd.index("--settings")
-                settings_path = cmd[settings_idx + 1]
-                try:
-                    with open(settings_path) as f:
-                        settings_file_content = f.read()
-                except FileNotFoundError:
-                    pass
+        def capture_cmd(*args, **kwargs):
+            nonlocal captured_cmd
+            captured_cmd = kwargs.get("args") or args[0]
             return MagicMock(returncode=0, stdout="output", stderr="")
 
-        with patch("zoyd.loop.subprocess.run", side_effect=capture_settings):
+        with patch("zoyd.loop.subprocess.run", side_effect=capture_cmd):
             invoke_claude("test prompt", sandbox=False)
 
-            assert settings_file_content is not None
-            settings = json.loads(settings_file_content)
-            assert "sandbox" in settings
-            assert settings["sandbox"]["enabled"] is False
-            assert "autoAllowBashIfSandboxed" not in settings["sandbox"]
+            assert captured_cmd is not None
+            # Should use --dangerously-skip-permissions instead of --permission-mode
+            assert "--dangerously-skip-permissions" in captured_cmd
+            assert "--permission-mode" not in captured_cmd
+            # Should not use --settings file in rabid mode
+            assert "--settings" not in captured_cmd
 
 
 class TestDisallowedTools:
