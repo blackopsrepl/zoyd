@@ -891,6 +891,7 @@ def create_live_display(
     max_log_lines: int = 20,
     refresh_per_second: int = 4,
     rabid: bool = False,
+    event_emitter: Any = None,
 ) -> LiveDisplay:
     """Create a live display instance.
 
@@ -906,6 +907,7 @@ def create_live_display(
         max_log_lines: Maximum number of log lines to show.
         refresh_per_second: How often to refresh the display.
         rabid: If True, apply Sauron eye styling to the banner.
+        event_emitter: Optional event emitter for task editor events.
 
     Returns:
         A configured LiveDisplay instance.
@@ -920,6 +922,7 @@ def create_live_display(
         max_log_lines=max_log_lines,
         refresh_per_second=refresh_per_second,
         rabid=rabid,
+        event_emitter=event_emitter,
     )
 
 

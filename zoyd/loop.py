@@ -574,6 +574,8 @@ class LoopRunner:
         self.vector_recent_n = vector_recent_n if vector_recent_n is not None else cfg.vector_recent_n
         self.sandbox = sandbox
         self.rabid = rabid
+        # Event emitter for TUI dashboard integration (must be before display creation)
+        self.events = EventEmitter()
         # Create display for output (TUI or plain depending on settings)
         if not self.tui_enabled:
             self.live: LiveDisplay | PlainDisplay = create_plain_display(
@@ -609,8 +611,6 @@ class LoopRunner:
         self.stats_total_tasks: int = 0
         # Cost tracking
         self.stats_total_cost: float = 0.0
-        # Event emitter for TUI dashboard integration
-        self.events = EventEmitter()
         # Session logger for persistent logging
         # Skip session logging in dry-run mode (no point logging a dry run)
         self.session_logger: SessionLogger | None = None
