@@ -152,6 +152,12 @@ def cli():
     is_flag=True,
     help="Disable sandbox (allows unrestricted bash)",
 )
+@click.option(
+    "--interactive",
+    "-i",
+    is_flag=True,
+    help="Enable interactive chat mode (allows real-time user messages)",
+)
 @click.pass_context
 def run(
     ctx: click.Context,
@@ -177,6 +183,7 @@ def run(
     vector_memory: bool | None,
     vector_top_k: int | None,
     rabid: bool,
+    interactive: bool,
 ):
     """Run the Zoyd loop against a PRD file.
 
@@ -250,6 +257,7 @@ def run(
         vector_top_k=vector_top_k,
         sandbox=not rabid,
         rabid=rabid,
+        interactive=interactive,
     )
 
     exit_code = runner.run()
