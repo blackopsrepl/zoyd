@@ -594,6 +594,7 @@ class LoopRunner:
                 max_cost=self.max_cost,
                 refresh_per_second=int(self.tui_refresh_rate),
                 rabid=self.rabid,
+                event_emitter=self.events,
             )
         self.consecutive_failures = 0
         self.max_consecutive_failures = 3
@@ -849,6 +850,17 @@ class LoopRunner:
                                 msg_type, cleaned_text, metadata = parse_command(msg.text)
                                 # Log to TUI with appropriate styling
                                 self.live.log_chat_message(cleaned_text, msg_type)
+                                # Emit CHAT_MESSAGE_RECEIVED event
+                                self.events.emit(EventType.CHAT_MESSAGE_RECEIVED, {
+                                    "message": msg.text,
+                                    "type": msg_type,
+                                    "timestamp": msg.timestamp.isoformat(),
+                                })
+                            # Emit CHAT_MESSAGE_SENT when messages are incorporated
+                            self.events.emit(EventType.CHAT_MESSAGE_SENT, {
+                                "count": len(chat_messages),
+                                "iteration": iteration,
+                            })
 
                     # Build prompt
                     current_task_text = next_task.text if next_task else "(No incomplete tasks)"

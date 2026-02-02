@@ -22,6 +22,7 @@ from rich.text import Text
 
 from zoyd import __version__
 from zoyd.tui.banner import get_versioned_banner, render_banner_styled
+from zoyd.tui.events import EventType
 from zoyd.tui.keyboard import CharEvent, Key, KeyboardListener, KeyEvent
 from zoyd.tui.panels import create_status_bar
 from zoyd.tui.spinners import MindFlayerSpinner
@@ -64,6 +65,7 @@ class LiveDisplay:
         max_log_lines: int = 20,
         refresh_per_second: int = 4,
         rabid: bool = False,
+        event_emitter: Any = None,
     ) -> None:
         """Initialize the live display.
 
@@ -77,6 +79,7 @@ class LiveDisplay:
             max_log_lines: Maximum number of log lines to show.
             refresh_per_second: How often to refresh the display.
             rabid: If True, apply Sauron eye styling to the banner.
+            event_emitter: Optional event emitter for emitting events.
         """
         self.console = console
         self.prd_path = prd_path
@@ -87,6 +90,7 @@ class LiveDisplay:
         self.max_log_lines = max_log_lines
         self.refresh_per_second = refresh_per_second
         self.rabid = rabid
+        self.event_emitter = event_emitter
 
         # State
         self._iteration = 0
@@ -512,6 +516,8 @@ class LiveDisplay:
     def _handle_editor_action(self, action: EditorAction) -> None:
         """Handle an action returned by the TaskEditor.
 
+        Emits appropriate events based on the action performed.
+
         Args:
             action: The EditorAction to handle.
         """
@@ -520,24 +526,35 @@ class LiveDisplay:
         elif action == EditorAction.QUIT_FORCE:
             self.enter_log_view()
         elif action == EditorAction.SAVE_AND_QUIT:
+            if self.event_emitter is not None:
+                self.event_emitter.emit(EventType.TASK_EDITED)
             self.enter_log_view()
-        # CONTINUE and SAVE do nothing (stay in task view)
+        elif action == EditorAction.SAVE:
+            if self.event_emitter is not None:
+                self.event_emitter.emit(EventType.TASK_EDITED)
+        # CONTINUE does nothing (stay in task view)
 
     def enter_task_view(self) -> None:
         """Switch to TASK view (task editor).
 
         Refreshes the display to show the task editor.
+        Emits TASK_EDITOR_OPENED event if event_emitter is available.
         """
         if self.task_editor is not None:
             self.view_mode = ViewMode.TASK
+            if self.event_emitter is not None:
+                self.event_emitter.emit(EventType.TASK_EDITOR_OPENED)
             self._refresh()
 
     def enter_log_view(self) -> None:
         """Switch to LOG view (scrolling logs).
 
         Refreshes the display to show the log view.
+        Emits TASK_EDITOR_CLOSED event if event_emitter is available.
         """
         self.view_mode = ViewMode.LOG
+        if self.event_emitter is not None:
+            self.event_emitter.emit(EventType.TASK_EDITOR_CLOSED)
         self._refresh()
 
     def toggle_view(self) -> None:
