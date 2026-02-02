@@ -20,6 +20,15 @@ from zoyd.tui.banner import print_banner, get_banner_text, ZOYD_BANNER
 # Re-export task tree visualization
 from zoyd.tui.task_tree import render_task_tree
 
+# Re-export task editor
+from zoyd.tui.task_editor import (
+    EditorMode,
+    EditorAction,
+    TaskEditor,
+    EditAction,
+    create_task_editor,
+)
+
 # Re-export panel components
 from zoyd.tui.panels import (
     StatusBar,
@@ -101,6 +110,12 @@ __all__ = [
     "ZOYD_BANNER",
     # Task tree
     "render_task_tree",
+    # Task editor
+    "EditorMode",
+    "EditorAction",
+    "TaskEditor",
+    "EditAction",
+    "create_task_editor",
     # Panels
     "StatusBar",
     "OutputPanel",
