@@ -214,7 +214,12 @@ class KeyboardListener:
             return
 
         if not ready:
-            return  # Bare ESC — ignore.
+            # Bare ESC — dispatch ESCAPE key.
+            try:
+                self.callback(KeyEvent(key=Key.ESCAPE))
+            except Exception:
+                pass  # Never crash the listener thread.
+            return
 
         try:
             ch = sys.stdin.read(1)
@@ -222,7 +227,12 @@ class KeyboardListener:
             return
 
         if ch != "[":
-            return  # Not a CSI sequence — ignore.
+            # Not a CSI sequence — dispatch ESCAPE key.
+            try:
+                self.callback(KeyEvent(key=Key.ESCAPE))
+            except Exception:
+                pass  # Never crash the listener thread.
+            return
 
         # Read the remaining bytes of the sequence (up to 4 chars).
         seq = ""
