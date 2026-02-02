@@ -487,6 +487,7 @@ class LiveDisplay:
                 Key.PAGE_DOWN: "page_down",
                 Key.HOME: "home",
                 Key.END: "end",
+                Key.ESCAPE: "escape",
             }
             if event.key in key_map:
                 action = self.task_editor.handle_key(key_map[event.key])
