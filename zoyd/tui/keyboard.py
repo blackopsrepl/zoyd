@@ -16,7 +16,7 @@ import threading
 import tty
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable
+from typing import Callable, Union
 
 
 class Key(Enum):
@@ -28,6 +28,16 @@ class Key(Enum):
     PAGE_DOWN = "page_down"
     HOME = "home"
     END = "end"
+
+
+class CharEvent:
+    """A character input event."""
+
+    def __init__(self, char: str) -> None:
+        self.char = char
+
+    def __repr__(self) -> str:
+        return f"CharEvent(char={self.char!r})"
 
 
 @dataclass(frozen=True)
@@ -74,7 +84,7 @@ class KeyboardListener:
         Function called with a :class:`KeyEvent` for each recognised key.
     """
 
-    def __init__(self, callback: Callable[[KeyEvent], None]) -> None:
+    def __init__(self, callback: Callable[[Union[KeyEvent, CharEvent]], None]) -> None:
         self.callback = callback
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
@@ -173,7 +183,12 @@ class KeyboardListener:
 
         if ch == "\x1b":
             self._read_escape_sequence()
-        # Ignore all other characters (plain text, etc.)
+        elif ch.isprintable():
+            # Dispatch printable characters
+            try:
+                self.callback(CharEvent(char=ch))
+            except Exception:
+                pass  # Never crash the listener thread.
 
     def _read_escape_sequence(self) -> None:
         """Try to read and decode an escape sequence after ESC."""

@@ -10,6 +10,8 @@ the display when the terminal size changes.
 from __future__ import annotations
 
 import signal
+from enum import Enum, auto
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 from rich.console import Group
@@ -20,17 +22,23 @@ from rich.text import Text
 
 from zoyd import __version__
 from zoyd.tui.banner import get_versioned_banner, render_banner_styled
-from zoyd.tui.keyboard import Key, KeyboardListener, KeyEvent
+from zoyd.tui.keyboard import CharEvent, Key, KeyboardListener, KeyEvent
 from zoyd.tui.panels import create_status_bar
 from zoyd.tui.spinners import MindFlayerSpinner
+from zoyd.tui.task_editor import EditorAction, TaskEditor
 from zoyd.tui.theme import COLORS
 
 from rich.console import RenderableType
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from rich.console import Console
+
+
+class ViewMode(Enum):
+    """View modes for the live display."""
+
+    LOG = auto()
+    TASK = auto()
 
 # Default code theme for syntax highlighting in Markdown blocks
 DEFAULT_CODE_THEME = "dracula"
@@ -89,6 +97,12 @@ class LiveDisplay:
         self._scroll_offset: int = 0
         self._completed = 0
         self._total = 0
+
+        # View mode and task editor
+        self.view_mode = ViewMode.LOG
+        self.task_editor: TaskEditor | None = None
+        if prd_path and Path(prd_path).exists():
+            self.task_editor = TaskEditor(Path(prd_path), console)
 
         # Live display
         self._live: Live | None = None
@@ -407,12 +421,16 @@ class LiveDisplay:
         Layout (top to bottom):
         1. ASCII art banner (ZOYD logo + mind flayer)
         2. Status bar (PRD, iteration, model, cost)
-        3. Current task line (optional, with spinner)
-        4. Scrolling log panel (fills remaining terminal height)
+        3. Current task line (optional, with spinner) - LOG mode only
+        4. Scrolling log panel (fills remaining terminal height) - LOG mode only
+        5. Task editor - TASK mode only
 
         Returns:
             Rich renderable for the entire display.
         """
+        if self.view_mode == ViewMode.TASK and self.task_editor is not None:
+            return self.task_editor.render()
+
         components = [self._render_banner()]
         components.append(self._render_status())
 
@@ -431,23 +449,49 @@ class LiveDisplay:
 
     # --- Keyboard scroll handling ---
 
-    def _on_key(self, event: KeyEvent) -> None:
+    def _on_key(self, event: KeyEvent | CharEvent) -> None:
         """Handle a key event from the keyboard listener.
 
-        Adjusts ``_scroll_offset`` based on the key pressed and refreshes
-        the display.
-
-        Key bindings:
+        In LOG mode:
             Up      – scroll up 1 line
             Down    – scroll down 1 line
             PgUp    – scroll up by viewport height
             PgDn    – scroll down by viewport height
             Home    – scroll to top
             End     – scroll to bottom (re-enable auto-scroll)
+            't'     – switch to TASK view
+
+        In TASK mode:
+            All keys are passed to the TaskEditor.
         """
+        if isinstance(event, CharEvent):
+            # Character input
+            if self.view_mode == ViewMode.LOG and event.char == "t":
+                self.enter_task_view()
+            elif self.view_mode == ViewMode.TASK and self.task_editor is not None:
+                action = self.task_editor.handle_key(event.char)
+                self._handle_editor_action(action)
+            return
+
+        # KeyEvent handling
+        if self.view_mode == ViewMode.TASK and self.task_editor is not None:
+            # Map Key enum to task editor key names
+            key_map = {
+                Key.UP: "up",
+                Key.DOWN: "down",
+                Key.PAGE_UP: "page_up",
+                Key.PAGE_DOWN: "page_down",
+                Key.HOME: "home",
+                Key.END: "end",
+            }
+            if event.key in key_map:
+                action = self.task_editor.handle_key(key_map[event.key])
+                self._handle_editor_action(action)
+            return
+
+        # LOG mode navigation
         total = len(self._log_lines)
         log_height = self._get_log_height()
-        # Maximum scroll offset: total lines minus one viewport, clamped to 0
         max_offset = max(0, total - log_height)
 
         if event.key == Key.UP:
@@ -464,6 +508,44 @@ class LiveDisplay:
             self._scroll_offset = 0  # Re-enable auto-scroll
 
         self._refresh()
+
+    def _handle_editor_action(self, action: EditorAction) -> None:
+        """Handle an action returned by the TaskEditor.
+
+        Args:
+            action: The EditorAction to handle.
+        """
+        if action == EditorAction.QUIT:
+            self.enter_log_view()
+        elif action == EditorAction.QUIT_FORCE:
+            self.enter_log_view()
+        elif action == EditorAction.SAVE_AND_QUIT:
+            self.enter_log_view()
+        # CONTINUE and SAVE do nothing (stay in task view)
+
+    def enter_task_view(self) -> None:
+        """Switch to TASK view (task editor).
+
+        Refreshes the display to show the task editor.
+        """
+        if self.task_editor is not None:
+            self.view_mode = ViewMode.TASK
+            self._refresh()
+
+    def enter_log_view(self) -> None:
+        """Switch to LOG view (scrolling logs).
+
+        Refreshes the display to show the log view.
+        """
+        self.view_mode = ViewMode.LOG
+        self._refresh()
+
+    def toggle_view(self) -> None:
+        """Toggle between LOG and TASK views."""
+        if self.view_mode == ViewMode.LOG:
+            self.enter_task_view()
+        else:
+            self.enter_log_view()
 
     # --- Terminal resize handling ---
 
