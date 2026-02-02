@@ -131,6 +131,86 @@ Additional context for Claude goes here.
 6. Optionally auto-commit changes after each completed task
 7. Repeat until done or max iterations reached
 
+## Interactive Mode
+
+Zoyd supports an interactive mode that allows real-time communication with the running agent. Enable it with the `--interactive` (or `-i`) flag:
+
+```bash
+zoyd run --interactive
+```
+
+### Chat System
+
+When interactive mode is enabled, you can send messages to influence the Zoyd loop:
+
+**Via file:** Write to `.zoyd/chat.txt` (JSONL format):
+```bash
+echo '{"text": "Fix the auth bug first", "type": "chat"}' >> .zoyd/chat.txt
+```
+
+**Via TUI:** Press `i` in the TUI to enter input mode (future feature)
+
+**Message Commands:**
+
+Prefix messages with special characters for different behaviors:
+
+| Prefix | Example | Effect |
+|--------|---------|--------|
+| `!bash` | `!bash ls -la` | Execute command, include output in prompt |
+| `@` | `@src/main.py` | Include file content in prompt |
+| `>task` | `>task Add error handling` | Suggest new task |
+| `?` | `?How does this work?` | Ask question (side chat) |
+| `#urgent` | `Fix this now #urgent` | Mark as high priority |
+
+Messages are read before each iteration and incorporated into Claude's prompt context.
+
+### Task Editor
+
+Press `t` in the TUI to enter the vim-like task editor. This allows editing the PRD task list in real-time.
+
+**Modes:**
+- **NORMAL** (default): Navigate and manipulate tasks
+- **INSERT**: Edit task text
+- **COMMAND**: Execute editor commands (`:w`, `:q`, etc.)
+- **SEARCH**: Find tasks (`/pattern`)
+
+**Key Bindings (NORMAL mode):**
+
+| Key | Action |
+|-----|--------|
+| `j` / `↓` | Move cursor down |
+| `k` / `↑` | Move cursor up |
+| `gg` | Jump to first task |
+| `G` | Jump to last task |
+| `i` | Edit task (enter INSERT mode) |
+| `a` | Edit task (cursor after) |
+| `o` | Add task below, enter INSERT |
+| `O` | Add task above, enter INSERT |
+| `dd` | Delete current task |
+| `x` | Toggle complete `[ ]` ↔ `[x]` |
+| `J` | Move task down |
+| `K` | Move task up |
+| `u` | Undo last action |
+| `/` | Search for pattern |
+| `n` / `N` | Next/previous search result |
+| `:` | Enter command mode |
+| `?` | Show help |
+| `Esc` | Return to NORMAL mode |
+| `t` | Toggle back to log view |
+
+**Commands (after pressing `:`):**
+
+| Command | Action |
+|---------|--------|
+| `:w` / `:write` | Save PRD file |
+| `:q` / `:quit` | Quit editor (warns if unsaved) |
+| `:wq` | Save and quit |
+| `:q!` | Force quit without saving |
+| `:e <n>` | Go to task number n |
+| `:s/old/new` | Substitute in current task |
+
+Press `:q` or `:wq` to return to the log view.
+
 ## Exit Codes
 
 - `0` - All tasks complete
@@ -158,6 +238,7 @@ Additional context for Claude goes here.
 | `--sessions-dir PATH` | Session log directory | `.zoyd/sessions` |
 | `--dry-run` | Show prompts without running | disabled |
 | `-v, --verbose` | Verbose output | disabled |
+| `-i, --interactive` | Enable interactive chat mode | disabled |
 
 ### `zoyd init`
 
