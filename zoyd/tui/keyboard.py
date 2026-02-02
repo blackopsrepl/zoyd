@@ -186,6 +186,18 @@ class KeyboardListener:
 
         if ch == "\x1b":
             self._read_escape_sequence()
+        elif ch in ("\x7f", "\x08"):
+            # Backspace (DEL or BS)
+            try:
+                self.callback(KeyEvent(key=Key.BACKSPACE))
+            except Exception:
+                pass  # Never crash the listener thread.
+        elif ch in ("\r", "\n"):
+            # Enter (CR or LF)
+            try:
+                self.callback(KeyEvent(key=Key.ENTER))
+            except Exception:
+                pass  # Never crash the listener thread.
         elif ch.isprintable():
             # Dispatch printable characters
             try:
