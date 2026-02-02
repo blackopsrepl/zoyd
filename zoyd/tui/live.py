@@ -489,6 +489,7 @@ class LiveDisplay:
                 Key.END: "end",
                 Key.ESCAPE: "escape",
                 Key.BACKSPACE: "backspace",
+                Key.ENTER: "\r",
             }
             if event.key in key_map:
                 action = self.task_editor.handle_key(key_map[event.key])
