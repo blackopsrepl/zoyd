@@ -1,6 +1,7 @@
 """Tests for PRD parsing."""
 
 import pytest
+from pathlib import Path
 
 from zoyd.prd import (
     Task,
@@ -10,6 +11,11 @@ from zoyd.prd import (
     is_all_complete,
     get_next_incomplete_task,
     validate_prd,
+    edit_task,
+    add_task,
+    delete_task,
+    move_task,
+    toggle_task,
 )
 
 
@@ -239,3 +245,313 @@ class TestValidatePrd:
 """
         warnings = validate_prd(content)
         assert len(warnings) == 0
+
+
+class TestEditTask:
+    """Tests for edit_task function."""
+
+    def test_edit_task_text_preserve_incomplete(self, tmp_path):
+        """Edit task text and preserve incomplete state."""
+        prd_file = tmp_path / "test.md"
+        prd_file.write_text("# Tasks\n- [ ] Old task\n- [x] Completed task\n")
+
+        result = edit_task(prd_file, 2, "Updated task")
+
+        assert result.text == "Updated task"
+        assert result.complete is False
+        assert result.line_number == 2
+
+        content = prd_file.read_text()
+        assert "- [ ] Updated task" in content
+        assert "- [ ] Old task" not in content
+        assert "- [x] Completed task" in content
+
+    def test_edit_task_text_preserve_complete(self, tmp_path):
+        """Edit task text and preserve complete state."""
+        prd_file = tmp_path / "test.md"
+        prd_file.write_text("- [ ] First\n- [x] Second\n")
+
+        result = edit_task(prd_file, 2, "Updated second")
+
+        assert result.complete is True
+        content = prd_file.read_text()
+        assert "- [x] Updated second" in content
+
+    def test_edit_task_file_not_found(self, tmp_path):
+        """Raise FileNotFoundError for missing file."""
+        with pytest.raises(FileNotFoundError):
+            edit_task(tmp_path / "nonexistent.md", 1, "Task")
+
+    def test_edit_task_invalid_line(self, tmp_path):
+        """Raise ValueError for invalid line number."""
+        prd_file = tmp_path / "test.md"
+        prd_file.write_text("- [ ] Task\n")
+
+        with pytest.raises(ValueError, match="Invalid line number"):
+            edit_task(prd_file, 0, "Task")
+
+        with pytest.raises(ValueError, match="Invalid line number"):
+            edit_task(prd_file, 5, "Task")
+
+    def test_edit_non_task_line(self, tmp_path):
+        """Raise ValueError for non-task line."""
+        prd_file = tmp_path / "test.md"
+        prd_file.write_text("# Header\n- [ ] Task\n")
+
+        with pytest.raises(ValueError, match="not a task checkbox"):
+            edit_task(prd_file, 1, "Task")
+
+
+class TestAddTask:
+    """Tests for add_task function."""
+
+    def test_add_task_incomplete(self, tmp_path):
+        """Add incomplete task after line."""
+        prd_file = tmp_path / "test.md"
+        prd_file.write_text("- [ ] First\n")
+
+        result = add_task(prd_file, 1, "Second task")
+
+        assert result.text == "Second task"
+        assert result.complete is False
+        assert result.line_number == 2
+
+        content = prd_file.read_text()
+        lines = content.strip().split("\n")
+        assert lines[0] == "- [ ] First"
+        assert lines[1] == "- [ ] Second task"
+
+    def test_add_task_complete(self, tmp_path):
+        """Add complete task after line."""
+        prd_file = tmp_path / "test.md"
+        prd_file.write_text("- [ ] First\n")
+
+        result = add_task(prd_file, 1, "Second", complete=True)
+
+        assert result.complete is True
+        content = prd_file.read_text()
+        assert "- [x] Second" in content
+
+    def test_add_task_at_beginning(self, tmp_path):
+        """Add task at beginning (after line 0)."""
+        prd_file = tmp_path / "test.md"
+        prd_file.write_text("- [ ] First\n- [ ] Second\n")
+
+        result = add_task(prd_file, 0, "New first")
+
+        assert result.line_number == 1
+        content = prd_file.read_text()
+        lines = content.strip().split("\n")
+        assert lines[0] == "- [ ] New first"
+        assert lines[1] == "- [ ] First"
+
+    def test_add_task_file_not_found(self, tmp_path):
+        """Raise FileNotFoundError for missing file."""
+        with pytest.raises(FileNotFoundError):
+            add_task(tmp_path / "nonexistent.md", 0, "Task")
+
+    def test_add_task_invalid_line(self, tmp_path):
+        """Raise ValueError for invalid line number."""
+        prd_file = tmp_path / "test.md"
+        prd_file.write_text("- [ ] Task\n")
+
+        with pytest.raises(ValueError):
+            add_task(prd_file, 5, "New task")
+
+
+class TestDeleteTask:
+    """Tests for delete_task function."""
+
+    def test_delete_task(self, tmp_path):
+        """Delete task at line."""
+        prd_file = tmp_path / "test.md"
+        prd_file.write_text("- [ ] First\n- [x] Second\n- [ ] Third\n")
+
+        result = delete_task(prd_file, 2)
+
+        assert result.text == "Second"
+        assert result.complete is True
+        assert result.line_number == 2  # Original line number
+
+        content = prd_file.read_text()
+        lines = content.strip().split("\n")
+        assert len(lines) == 2
+        assert "- [ ] First" in content
+        assert "- [ ] Third" in content
+        assert "- [x] Second" not in content
+
+    def test_delete_only_task(self, tmp_path):
+        """Delete the only task in file."""
+        prd_file = tmp_path / "test.md"
+        prd_file.write_text("- [ ] Only task\n")
+
+        result = delete_task(prd_file, 1)
+
+        assert result.text == "Only task"
+        content = prd_file.read_text().strip()
+        assert content == ""
+
+    def test_delete_task_file_not_found(self, tmp_path):
+        """Raise FileNotFoundError for missing file."""
+        with pytest.raises(FileNotFoundError):
+            delete_task(tmp_path / "nonexistent.md", 1)
+
+    def test_delete_task_invalid_line(self, tmp_path):
+        """Raise ValueError for invalid line number."""
+        prd_file = tmp_path / "test.md"
+        prd_file.write_text("- [ ] Task\n")
+
+        with pytest.raises(ValueError, match="Invalid line number"):
+            delete_task(prd_file, 0)
+
+        with pytest.raises(ValueError, match="Invalid line number"):
+            delete_task(prd_file, 5)
+
+    def test_delete_non_task_line(self, tmp_path):
+        """Raise ValueError for non-task line."""
+        prd_file = tmp_path / "test.md"
+        prd_file.write_text("# Header\n- [ ] Task\n")
+
+        with pytest.raises(ValueError, match="not a task checkbox"):
+            delete_task(prd_file, 1)
+
+
+class TestMoveTask:
+    """Tests for move_task function."""
+
+    def test_move_task_up(self, tmp_path):
+        """Move task to earlier position."""
+        prd_file = tmp_path / "test.md"
+        prd_file.write_text("- [ ] First\n- [ ] Second\n- [ ] Third\n")
+
+        result = move_task(prd_file, 3, 1)
+
+        assert result.text == "Third"
+        assert result.line_number == 1
+
+        content = prd_file.read_text()
+        lines = content.strip().split("\n")
+        assert lines[0] == "- [ ] Third"
+        assert lines[1] == "- [ ] First"
+        assert lines[2] == "- [ ] Second"
+
+    def test_move_task_down(self, tmp_path):
+        """Move task to later position."""
+        prd_file = tmp_path / "test.md"
+        prd_file.write_text("- [ ] First\n- [ ] Second\n- [ ] Third\n")
+
+        result = move_task(prd_file, 1, 3)
+
+        assert result.text == "First"
+        assert result.line_number == 3
+
+        content = prd_file.read_text()
+        lines = content.strip().split("\n")
+        assert lines[0] == "- [ ] Second"
+        assert lines[1] == "- [ ] Third"
+        assert lines[2] == "- [ ] First"
+
+    def test_move_same_line_error(self, tmp_path):
+        """Raise ValueError when from and to are the same."""
+        prd_file = tmp_path / "test.md"
+        prd_file.write_text("- [ ] Task\n")
+
+        with pytest.raises(ValueError, match="cannot be the same"):
+            move_task(prd_file, 1, 1)
+
+    def test_move_task_file_not_found(self, tmp_path):
+        """Raise FileNotFoundError for missing file."""
+        with pytest.raises(FileNotFoundError):
+            move_task(tmp_path / "nonexistent.md", 1, 2)
+
+    def test_move_task_invalid_line(self, tmp_path):
+        """Raise ValueError for invalid line number."""
+        prd_file = tmp_path / "test.md"
+        prd_file.write_text("- [ ] First\n- [ ] Second\n")
+
+        with pytest.raises(ValueError, match="Invalid from_line"):
+            move_task(prd_file, 0, 1)
+
+        with pytest.raises(ValueError, match="Invalid from_line"):
+            move_task(prd_file, 5, 1)
+
+        with pytest.raises(ValueError, match="Invalid to_line"):
+            move_task(prd_file, 1, 0)
+
+        with pytest.raises(ValueError, match="Invalid to_line"):
+            move_task(prd_file, 1, 5)
+
+    def test_move_non_task_line(self, tmp_path):
+        """Raise ValueError for non-task line."""
+        prd_file = tmp_path / "test.md"
+        prd_file.write_text("# Header\n- [ ] Task\n- [ ] Another\n")
+
+        with pytest.raises(ValueError, match="not a task checkbox"):
+            move_task(prd_file, 1, 2)
+
+
+class TestToggleTask:
+    """Tests for toggle_task function."""
+
+    def test_toggle_incomplete_to_complete(self, tmp_path):
+        """Toggle incomplete task to complete."""
+        prd_file = tmp_path / "test.md"
+        prd_file.write_text("- [ ] Incomplete task\n")
+
+        result = toggle_task(prd_file, 1)
+
+        assert result.text == "Incomplete task"
+        assert result.complete is True
+
+        content = prd_file.read_text()
+        assert "- [x] Incomplete task" in content
+        assert "- [ ] Incomplete task" not in content
+
+    def test_toggle_complete_to_incomplete(self, tmp_path):
+        """Toggle complete task to incomplete."""
+        prd_file = tmp_path / "test.md"
+        prd_file.write_text("- [x] Complete task\n")
+
+        result = toggle_task(prd_file, 1)
+
+        assert result.text == "Complete task"
+        assert result.complete is False
+
+        content = prd_file.read_text()
+        assert "- [ ] Complete task" in content
+        assert "- [x] Complete task" not in content
+
+    def test_toggle_task_file_not_found(self, tmp_path):
+        """Raise FileNotFoundError for missing file."""
+        with pytest.raises(FileNotFoundError):
+            toggle_task(tmp_path / "nonexistent.md", 1)
+
+    def test_toggle_task_invalid_line(self, tmp_path):
+        """Raise ValueError for invalid line number."""
+        prd_file = tmp_path / "test.md"
+        prd_file.write_text("- [ ] Task\n")
+
+        with pytest.raises(ValueError, match="Invalid line number"):
+            toggle_task(prd_file, 0)
+
+        with pytest.raises(ValueError, match="Invalid line number"):
+            toggle_task(prd_file, 5)
+
+    def test_toggle_non_task_line(self, tmp_path):
+        """Raise ValueError for non-task line."""
+        prd_file = tmp_path / "test.md"
+        prd_file.write_text("# Header\n- [ ] Task\n")
+
+        with pytest.raises(ValueError, match="not a task checkbox"):
+            toggle_task(prd_file, 1)
+
+    def test_toggle_uppercase_x(self, tmp_path):
+        """Toggle task with uppercase X."""
+        prd_file = tmp_path / "test.md"
+        prd_file.write_text("- [X] Completed task\n")
+
+        result = toggle_task(prd_file, 1)
+
+        assert result.complete is False
+        content = prd_file.read_text()
+        assert "- [ ] Completed task" in content
