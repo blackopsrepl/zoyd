@@ -12,6 +12,7 @@ import uuid
 from pathlib import Path
 
 from . import prd, progress
+from .chat import ChatQueue, format_messages_for_prompt, parse_command
 from .config import load_config
 from .session.embedding import get_provider
 from .session.logger import SessionLogger
@@ -86,6 +87,30 @@ IMPORTANT: Work on ONLY this task. Do NOT work on other tasks. Do NOT run any gi
 {prd_content}
 """
 
+PROMPT_TEMPLATE_WITH_CHAT = """You are working on a project defined by the PRD.
+Complete the next incomplete task marked with [ ].
+
+When you complete a task:
+1. Make code changes
+2. Run tests to verify
+3. Mark task complete ([ ] -> [x]) in PRD
+
+Status: Iteration {iteration}, {completed}/{total} tasks complete
+
+## Current Task (COMPLETE THIS ONLY)
+{current_task}
+
+IMPORTANT: Work on ONLY this task. Do NOT work on other tasks. Do NOT run any git commands (no git add, git commit, git push, etc.).
+
+{chat_section}
+
+## PRD (for context only)
+{prd_content}
+
+## Progress Log
+{progress_content}
+"""
+
 # Prompt template for generating commit messages (conventional commits, no signatures)
 COMMIT_PROMPT_TEMPLATE = """Generate a git commit message for the changes below.
 
@@ -150,6 +175,40 @@ def build_prompt(
         completed=completed,
         total=total,
         current_task=current_task,
+        prd_content=prd_content,
+        progress_content=progress_content or "(No progress yet)",
+    )
+
+
+def build_prompt_with_chat(
+    prd_content: str,
+    progress_content: str,
+    iteration: int,
+    completed: int,
+    total: int,
+    current_task: str,
+    chat_section: str,
+) -> str:
+    """Build a prompt including user chat messages.
+
+    Args:
+        prd_content: Content of the PRD file.
+        progress_content: Content of the progress file.
+        iteration: Current iteration number.
+        completed: Number of completed tasks.
+        total: Total number of tasks.
+        current_task: Text of the current task to complete.
+        chat_section: Formatted chat messages section.
+
+    Returns:
+        Formatted prompt string.
+    """
+    return PROMPT_TEMPLATE_WITH_CHAT.format(
+        iteration=iteration,
+        completed=completed,
+        total=total,
+        current_task=current_task,
+        chat_section=chat_section,
         prd_content=prd_content,
         progress_content=progress_content or "(No progress yet)",
     )
@@ -483,6 +542,7 @@ class LoopRunner:
         vector_recent_n: int | None = None,
         sandbox: bool = True,
         rabid: bool = False,
+        interactive: bool = False,
     ):
         # Load config for resolving None sentinels
         cfg = load_config()
@@ -582,6 +642,12 @@ class LoopRunner:
                     db=self.redis_db,
                     password=self.redis_password,
                 )
+        # Chat queue for interactive mode
+        # Skip in dry-run mode (no need for chat in dry run)
+        self.chat_queue: ChatQueue | None = None
+        if interactive and not self.dry_run:
+            chat_file = Path(".zoyd") / "chat.txt"
+            self.chat_queue = ChatQueue(chat_file)
 
     def get_backoff_delay(self) -> float:
         """Calculate exponential backoff delay based on consecutive failures.
@@ -773,9 +839,32 @@ class LoopRunner:
                                     line_number=task.line_number,
                                 )
 
+                    # Check for and process chat messages
+                    chat_messages = []
+                    if self.chat_queue is not None and self.chat_queue.has_messages:
+                        chat_messages = self.chat_queue.dequeue_all()
+                        if chat_messages:
+                            self.live.log(f"Received {len(chat_messages)} message(s) from user")
+                            for msg in chat_messages:
+                                msg_type, cleaned_text, metadata = parse_command(msg.text)
+                                if msg_type != "chat" or metadata:
+                                    self.live.log(f"  [{msg_type}] {cleaned_text[:50]}")
+
                     # Build prompt
                     current_task_text = next_task.text if next_task else "(No incomplete tasks)"
-                    if self.vector_mem is not None and self.vector_mem.is_available:
+                    if chat_messages:
+                        # Use chat-enabled prompt
+                        chat_section = format_messages_for_prompt(chat_messages)
+                        prompt = build_prompt_with_chat(
+                            prd_content=prd_content,
+                            progress_content=progress_content,
+                            iteration=iteration,
+                            completed=completed,
+                            total=total,
+                            current_task=current_task_text,
+                            chat_section=chat_section,
+                        )
+                    elif self.vector_mem is not None and self.vector_mem.is_available:
                         # Use vector memory for semantic retrieval
                         results = self.vector_mem.find_relevant_outputs(
                             query_text=current_task_text,
