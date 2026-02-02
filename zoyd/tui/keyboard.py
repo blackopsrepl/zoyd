@@ -28,6 +28,9 @@ class Key(Enum):
     PAGE_DOWN = "page_down"
     HOME = "home"
     END = "end"
+    ESCAPE = "escape"
+    BACKSPACE = "backspace"
+    ENTER = "enter"
 
 
 class CharEvent:

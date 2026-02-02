@@ -9,10 +9,10 @@ prd = "PRD.md"
 progress = "progress.txt"
 
 # Maximum number of loop iterations before stopping
-max_iterations = 150
+max_iterations = 667
 
 # Delay between iterations in seconds
-delay = 30.0
+delay = 12.0
 
 # Claude model to use (null uses default)
 # model = "claude-sonnet-4-20250514"
@@ -24,7 +24,7 @@ auto_commit = true
 verbose = true
 
 # Stop immediately on first failure
-fail_fast = false
+fail_fast = true
 
 # Enable session logging to Redis
 session_logging = true
@@ -34,7 +34,7 @@ session_logging = true
 
 # Redis storage backend configuration
 storage_backend = "redis"
-redis_host = "10.43.12.252"
+redis_host = "10.43.199.242"
 redis_port = 6379
 redis_db = 0
 redis_password = "REDACTED"

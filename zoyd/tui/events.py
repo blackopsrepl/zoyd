@@ -56,6 +56,19 @@ class EventType(Enum):
     # Logging
     LOG_MESSAGE = auto()
 
+    # Chat system
+    CHAT_MESSAGE_RECEIVED = auto()
+    CHAT_MESSAGE_SENT = auto()
+
+    # Task editor
+    TASK_EDITOR_OPENED = auto()
+    TASK_EDITOR_CLOSED = auto()
+    TASK_EDITED = auto()
+    TASK_ADDED = auto()
+    TASK_DELETED = auto()
+    TASK_MOVED = auto()
+    TASK_TOGGLED = auto()
+
 
 # Type alias for event handlers
 EventHandler = Callable[["Event"], None]
