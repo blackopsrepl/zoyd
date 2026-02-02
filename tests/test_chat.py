@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from zoyd.chat import ChatMessage, ChatQueue
+from zoyd.chat import ChatMessage, ChatQueue, format_messages_for_prompt, parse_command
 
 
 class TestChatMessage:
@@ -255,3 +255,141 @@ class TestChatQueueEdgeCases:
         queue.enqueue(large_text)
         messages = queue.dequeue_all()
         assert messages[0].text == large_text
+
+
+class TestParseCommand:
+    """Test command parsing functionality."""
+
+    def test_parse_bash_command(self):
+        """Parse !bash prefix."""
+        msg_type, text, metadata = parse_command("!bash ls -la")
+        assert msg_type == "bash"
+        assert text == "ls -la"
+        assert metadata == {}
+
+    def test_parse_file_reference(self):
+        """Parse @filepath prefix."""
+        msg_type, text, metadata = parse_command("@src/main.py")
+        assert msg_type == "file"
+        assert text == "src/main.py"
+
+    def test_parse_task_command(self):
+        """Parse >task prefix."""
+        msg_type, text, metadata = parse_command(">task Add more tests")
+        assert msg_type == "task"
+        assert text == "Add more tests"
+
+    def test_parse_question(self):
+        """Parse ?question prefix."""
+        msg_type, text, metadata = parse_command("?How does this work?")
+        assert msg_type == "question"
+        assert text == "How does this work?"
+
+    def test_parse_normal_chat(self):
+        """Normal text returns chat type."""
+        msg_type, text, metadata = parse_command("Hello world")
+        assert msg_type == "chat"
+        assert text == "Hello world"
+
+    def test_parse_empty_string(self):
+        """Empty string handled gracefully."""
+        msg_type, text, metadata = parse_command("")
+        assert msg_type == "chat"
+        assert text == ""
+
+    def test_parse_whitespace_only(self):
+        """Whitespace-only string handled."""
+        msg_type, text, metadata = parse_command("   ")
+        assert msg_type == "chat"
+        assert text == "   "
+
+    def test_parse_with_urgent_marker(self):
+        """Detect #urgent marker."""
+        msg_type, text, metadata = parse_command("Fix this now #urgent")
+        assert msg_type == "chat"
+        assert text == "Fix this now"
+        assert metadata["priority"] == "high"
+
+    def test_parse_with_important_marker(self):
+        """Detect !important marker."""
+        msg_type, text, metadata = parse_command("!important Check this")
+        assert msg_type == "chat"
+        assert text == "Check this"
+        assert metadata["priority"] == "high"
+
+    def test_parse_bash_with_urgent(self):
+        """Parse bash command with urgent marker."""
+        msg_type, text, metadata = parse_command("!bash cat config.py #urgent")
+        assert msg_type == "bash"
+        assert text == "cat config.py"
+        assert metadata["priority"] == "high"
+
+    def test_strips_whitespace_after_removing_markers(self):
+        """Clean up whitespace after removing markers."""
+        msg_type, text, metadata = parse_command("  !bash   ls   #urgent  ")
+        assert msg_type == "bash"
+        assert text == "ls"
+
+
+class TestFormatMessagesForPrompt:
+    """Test message formatting for prompts."""
+
+    def test_format_empty_list(self):
+        """Empty list returns empty string."""
+        result = format_messages_for_prompt([])
+        assert result == ""
+
+    def test_format_chat_message(self):
+        """Format simple chat message."""
+        msg = ChatMessage(text="Hello", type="chat")
+        result = format_messages_for_prompt([msg])
+        assert "User Messages" in result
+        assert "Hello" in result
+
+    def test_format_bash_message(self):
+        """Format bash command message."""
+        msg = ChatMessage(text="ls -la", type="bash")
+        result = format_messages_for_prompt([msg])
+        assert "Bash command" in result
+        assert "`ls -la`" in result
+
+    def test_format_file_message(self):
+        """Format file reference message."""
+        msg = ChatMessage(text="src/main.py", type="file")
+        result = format_messages_for_prompt([msg])
+        assert "File reference" in result
+
+    def test_format_task_message(self):
+        """Format task suggestion message."""
+        msg = ChatMessage(text="Add tests", type="task")
+        result = format_messages_for_prompt([msg])
+        assert "New task suggestion" in result
+
+    def test_format_question_message(self):
+        """Format question message."""
+        msg = ChatMessage(text="How does this work?", type="question")
+        result = format_messages_for_prompt([msg])
+        assert "Question" in result
+
+    def test_format_with_urgent_priority(self):
+        """Format message with urgent priority marker."""
+        msg = ChatMessage(
+            text="Fix bug",
+            type="chat",
+            metadata={"priority": "high"}
+        )
+        result = format_messages_for_prompt([msg])
+        assert "[URGENT]" in result
+
+    def test_format_multiple_messages(self):
+        """Format multiple messages."""
+        messages = [
+            ChatMessage(text="First", type="chat"),
+            ChatMessage(text="ls -la", type="bash"),
+            ChatMessage(text="Add feature", type="task"),
+        ]
+        result = format_messages_for_prompt(messages)
+        assert result.count("- [") == 3  # Three bullet points
+        assert "First" in result
+        assert "ls -la" in result
+        assert "Add feature" in result

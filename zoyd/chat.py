@@ -69,6 +69,107 @@ class ChatMessage:
         return f"ChatMessage({self.type}: {self.text[:50]!r})"
 
 
+def parse_command(text: str) -> tuple[str, str, dict[str, Any]]:
+    """Parse special command prefixes from message text.
+
+    Detects and extracts commands like !bash, @file, >task, ?question.
+    Returns the message type, cleaned text, and metadata.
+
+    Supported prefixes:
+        !bash <command>  -> type="bash", executes command, includes output
+        @<filepath>      -> type="file", reads file content
+        >task <text>     -> type="task", adds new task to PRD
+        ?<question>      -> type="question", side chat without iteration
+        #urgent          -> type="chat", marks as high priority
+        !important       -> type="chat", marks as high priority
+
+    Args:
+        text: Raw message text that may contain command prefix.
+
+    Returns:
+        Tuple of (msg_type, cleaned_text, metadata).
+        If no command detected, returns ("chat", text, {}).
+
+    Examples:
+        >>> parse_command("!bash ls -la")
+        ("bash", "ls -la", {})
+        >>> parse_command("@src/main.py")
+        ("file", "src/main.py", {})
+        >>> parse_command(">task Add tests")
+        ("task", "Add tests", {})
+        >>> parse_command("?How does this work?")
+        ("question", "How does this work?", {})
+        >>> parse_command("Normal message")
+        ("chat", "Normal message", {})
+    """
+    stripped = text.strip()
+
+    if not stripped:
+        return "chat", text, {}
+
+    # Check for urgent/important markers anywhere in the text
+    metadata: dict[str, Any] = {}
+    if "#urgent" in stripped or "!important" in stripped:
+        metadata["priority"] = "high"
+        # Remove markers from text
+        cleaned = stripped.replace("#urgent", "").replace("!important", "").strip()
+        if cleaned != stripped:
+            stripped = cleaned
+
+    # Check for command prefixes
+    if stripped.startswith("!bash "):
+        command = stripped[6:].strip()
+        return "bash", command, metadata
+
+    if stripped.startswith("@"):
+        filepath = stripped[1:].strip()
+        return "file", filepath, metadata
+
+    if stripped.startswith(">task "):
+        task_text = stripped[6:].strip()
+        return "task", task_text, metadata
+
+    if stripped.startswith("?"):
+        question = stripped[1:].strip()
+        return "question", question, metadata
+
+    return "chat", stripped, metadata
+
+
+def format_messages_for_prompt(messages: list[ChatMessage]) -> str:
+    """Format chat messages for inclusion in Claude prompt.
+
+    Creates a formatted string suitable for the "User Messages" section
+    of the prompt. Handles special message types appropriately.
+
+    Args:
+        messages: List of chat messages to format.
+
+    Returns:
+        Formatted string for prompt, or empty string if no messages.
+    """
+    if not messages:
+        return ""
+
+    lines = ["## User Messages"]
+    for msg in messages:
+        timestamp = msg.timestamp.strftime("%H:%M")
+        priority_marker = " [URGENT]" if msg.metadata.get("priority") == "high" else ""
+
+        if msg.type == "chat":
+            lines.append(f"- [{timestamp}]{priority_marker} {msg.text}")
+        elif msg.type == "bash":
+            lines.append(f"- [{timestamp}] Bash command: `{msg.text}`")
+        elif msg.type == "file":
+            lines.append(f"- [{timestamp}] File reference: `{msg.text}`")
+        elif msg.type == "task":
+            lines.append(f"- [{timestamp}] New task suggestion: {msg.text}")
+        elif msg.type == "question":
+            lines.append(f"- [{timestamp}] Question: {msg.text}")
+
+    return "\n".join(lines)
+
+
 class ChatQueue:
     """File-based message queue for chat system.
 
