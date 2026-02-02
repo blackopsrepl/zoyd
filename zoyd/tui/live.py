@@ -245,6 +245,34 @@ class LiveDisplay:
             self._scroll_offset += 1
         self._refresh()
 
+    def log_chat_message(self, message: str, msg_type: str = "chat") -> None:
+        """Log a chat message with type-specific styling.
+
+        Args:
+            message: The message text.
+            msg_type: Message type for styling ("chat", "bash", "file", "task", "question").
+        """
+        from datetime import datetime
+
+        timestamp = datetime.now().strftime("%H:%M")
+
+        # Style based on message type
+        if msg_type == "bash":
+            text = Text(f"[{timestamp}] [bash] {message}", style="cyan")
+        elif msg_type == "file":
+            text = Text(f"[{timestamp}] [file] {message}", style="green")
+        elif msg_type == "task":
+            text = Text(f"[{timestamp}] [task] {message}", style="yellow")
+        elif msg_type == "question":
+            text = Text(f"[{timestamp}] [?] {message}", style="magenta")
+        else:
+            text = Text(f"[{timestamp}] {message}", style="white")
+
+        self._log_lines.append(text)
+        if self._scroll_offset > 0:
+            self._scroll_offset += 1
+        self._refresh()
+
     def _render_banner(self) -> RenderableType:
         """Render the ZOYD ASCII art banner with mind flayer art and version.
 
@@ -704,6 +732,31 @@ class PlainDisplay:
         """
         for line in content.split("\n"):
             print(line)
+
+    def log_chat_message(self, message: str, msg_type: str = "chat") -> None:
+        """Log a chat message with type-specific prefix.
+
+        Args:
+            message: The message text.
+            msg_type: Message type for prefix ("chat", "bash", "file", "task", "question").
+        """
+        from datetime import datetime
+
+        timestamp = datetime.now().strftime("%H:%M")
+
+        # Prefix based on message type
+        if msg_type == "bash":
+            prefix = "[bash]"
+        elif msg_type == "file":
+            prefix = "[file]"
+        elif msg_type == "task":
+            prefix = "[task]"
+        elif msg_type == "question":
+            prefix = "[?]"
+        else:
+            prefix = "[chat]"
+
+        print(f"[{timestamp}] {prefix} {message}")
 
     def __enter__(self) -> "PlainDisplay":
         """Enter the display context.

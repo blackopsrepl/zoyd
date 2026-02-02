@@ -847,8 +847,8 @@ class LoopRunner:
                             self.live.log(f"Received {len(chat_messages)} message(s) from user")
                             for msg in chat_messages:
                                 msg_type, cleaned_text, metadata = parse_command(msg.text)
-                                if msg_type != "chat" or metadata:
-                                    self.live.log(f"  [{msg_type}] {cleaned_text[:50]}")
+                                # Log to TUI with appropriate styling
+                                self.live.log_chat_message(cleaned_text, msg_type)
 
                     # Build prompt
                     current_task_text = next_task.text if next_task else "(No incomplete tasks)"
