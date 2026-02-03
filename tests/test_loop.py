@@ -760,7 +760,7 @@ class TestAutoCommit:
         assert "Never" in COMMIT_SYSTEM_PROMPT
         assert "backtick" in COMMIT_SYSTEM_PROMPT.lower()
 
-    @patch("zoyd.loop.subprocess.run")
+    @patch("zoyd.loop.commit_manager.subprocess.run")
     def test_commit_changes_success(self, mock_run):
         """Test successful commit creation."""
         # Mock git add, git diff --cached, and git commit
@@ -774,7 +774,7 @@ class TestAutoCommit:
         assert success is True
         assert "abc123" in output
 
-    @patch("zoyd.loop.subprocess.run")
+    @patch("zoyd.loop.commit_manager.subprocess.run")
     def test_commit_changes_no_changes(self, mock_run):
         """Test commit when there are no changes."""
         mock_run.side_effect = [
@@ -786,7 +786,7 @@ class TestAutoCommit:
         assert success is True
         assert "No changes to commit" in output
 
-    @patch("zoyd.loop.subprocess.run")
+    @patch("zoyd.loop.commit_manager.subprocess.run")
     def test_commit_changes_add_fails(self, mock_run):
         """Test commit when git add fails."""
         mock_run.return_value = MagicMock(returncode=1, stderr="Permission denied")
@@ -795,7 +795,7 @@ class TestAutoCommit:
         assert success is False
         assert "git add failed" in output
 
-    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.commit_manager.invoke_claude")
     def test_generate_commit_message_success(self, mock_invoke):
         """Test successful commit message generation."""
         mock_invoke.return_value = (0, "Add new feature\n\nImplemented the widget component", None)
@@ -803,7 +803,7 @@ class TestAutoCommit:
         result = generate_commit_message("Made changes to widget", "Add widget")
         assert result == "Add new feature\n\nImplemented the widget component"
 
-    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.commit_manager.invoke_claude")
     def test_generate_commit_message_strips_coauthor(self, mock_invoke):
         """Test that Co-Author lines are stripped from generated messages."""
         mock_invoke.return_value = (
@@ -816,7 +816,7 @@ class TestAutoCommit:
         assert result == "Add new feature\n\nImplemented the widget component"
         assert "Co-Author" not in result
 
-    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.commit_manager.invoke_claude")
     def test_generate_commit_message_failure(self, mock_invoke):
         """Test commit message generation failure."""
         mock_invoke.return_value = (1, "Error", None)
@@ -824,7 +824,7 @@ class TestAutoCommit:
         result = generate_commit_message("Made changes", "Add widget")
         assert result is None
 
-    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.commit_manager.invoke_claude")
     def test_generate_commit_message_disables_sandbox(self, mock_invoke):
         """Test that generate_commit_message() passes sandbox=False to invoke_claude."""
         mock_invoke.return_value = (0, "Fix bug in parser", None)
@@ -835,7 +835,7 @@ class TestAutoCommit:
         _, kwargs = mock_invoke.call_args
         assert kwargs.get("sandbox") is False
 
-    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.commit_manager.invoke_claude")
     def test_generate_commit_message_strips_backticks(self, mock_invoke):
         """Test that code block fences are stripped from generated messages."""
         mock_invoke.return_value = (
@@ -848,7 +848,7 @@ class TestAutoCommit:
         assert result == "feat(cli): add --json flag\n\nAdded JSON output support"
         assert "```" not in result
 
-    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.commit_manager.invoke_claude")
     def test_generate_commit_message_strips_inline_backticks(self, mock_invoke):
         """Test that inline backticks are stripped from generated messages."""
         mock_invoke.return_value = (
@@ -1036,7 +1036,7 @@ class TestSandboxMode:
                     pass
             return MagicMock(returncode=0, stdout="output", stderr="")
 
-        with patch("zoyd.loop.subprocess.run", side_effect=capture_settings):
+        with patch("zoyd.loop.invoke.subprocess.run", side_effect=capture_settings):
             invoke_claude("test prompt")
 
             # Check that sandbox settings file was created with correct content
@@ -1056,7 +1056,7 @@ class TestSandboxMode:
             captured_cmd = kwargs.get("args") or args[0]
             return MagicMock(returncode=0, stdout="output", stderr="")
 
-        with patch("zoyd.loop.subprocess.run", side_effect=capture_cmd):
+        with patch("zoyd.loop.invoke.subprocess.run", side_effect=capture_cmd):
             invoke_claude("test prompt", sandbox=False)
 
             assert captured_cmd is not None
@@ -1081,7 +1081,7 @@ class TestDisallowedTools:
             captured_cmd = kwargs.get("args") or args[0]
             return MagicMock(returncode=0, stdout="output", stderr="")
 
-        with patch("zoyd.loop.subprocess.run", side_effect=capture_cmd):
+        with patch("zoyd.loop.invoke.subprocess.run", side_effect=capture_cmd):
             invoke_claude("test prompt")
 
         assert captured_cmd is not None
@@ -1210,7 +1210,7 @@ class TestFailFast:
         )
         assert runner.fail_fast is True
 
-    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.loop.invoke_claude")
     def test_fail_fast_exits_on_first_failure(self, mock_invoke, tmp_path):
         """Test that fail_fast mode exits immediately on first failure."""
         prd_file = tmp_path / "PRD.md"
@@ -1232,7 +1232,7 @@ class TestFailFast:
         # Should only call Claude once (fail-fast)
         assert mock_invoke.call_count == 1
 
-    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.loop.invoke_claude")
     def test_no_fail_fast_retries_on_failure(self, mock_invoke, tmp_path):
         """Test that without fail_fast, failures are retried up to max."""
         prd_file = tmp_path / "PRD.md"
@@ -1415,7 +1415,7 @@ class TestVerboseModeTiming:
         runner.run()
         assert runner.start_time is not None
 
-    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.loop.invoke_claude")
     @patch("zoyd.loop.time.time")
     def test_verbose_shows_elapsed_time(self, mock_time, mock_invoke, tmp_path, capsys):
         """Test that verbose mode displays elapsed time."""
@@ -1443,7 +1443,7 @@ class TestVerboseModeTiming:
         # PlainDisplay outputs verbose log messages to stdout
         assert "Elapsed time:" in captured.out
 
-    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.loop.invoke_claude")
     @patch("zoyd.loop.time.time")
     def test_verbose_shows_iteration_timing(self, mock_time, mock_invoke, tmp_path, capsys):
         """Test that verbose mode displays iteration timing."""
@@ -1533,7 +1533,7 @@ class TestSummaryStatistics:
         assert "Iterations:" in captured.out
         assert "Tasks completed:" in captured.out
 
-    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.loop.invoke_claude")
     @patch("zoyd.loop.time.time")
     def test_summary_shows_correct_stats(self, mock_time, mock_invoke, tmp_path, capsys):
         """Test that summary shows correct statistics after iterations."""
@@ -1562,7 +1562,7 @@ class TestSummaryStatistics:
         assert "Iterations: 0" in captured.out
         assert "Tasks completed: 0 (1/1 total)" in captured.out
 
-    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.loop.invoke_claude")
     @patch("zoyd.loop.time.time")
     @patch("zoyd.loop.time.sleep")
     def test_summary_on_max_iterations(self, mock_sleep, mock_time, mock_invoke, tmp_path, capsys):
@@ -1590,7 +1590,7 @@ class TestSummaryStatistics:
         assert "Iterations: 2" in captured.out
         assert "Success rate: 100.0% (2/2)" in captured.out
 
-    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.loop.invoke_claude")
     @patch("zoyd.loop.time.time")
     @patch("zoyd.loop.time.sleep")
     def test_summary_on_failure(self, mock_sleep, mock_time, mock_invoke, tmp_path, capsys):
@@ -1618,7 +1618,7 @@ class TestSummaryStatistics:
         assert "Iterations: 3" in captured.out  # max_consecutive_failures
         assert "Success rate: 0.0% (0/3)" in captured.out
 
-    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.loop.invoke_claude")
     @patch("zoyd.loop.time.time")
     def test_summary_on_fail_fast(self, mock_time, mock_invoke, tmp_path, capsys):
         """Test that summary is printed on fail-fast exit."""
@@ -1884,7 +1884,7 @@ class TestMaxCost:
         runner = LoopRunner(prd_path=prd_file, progress_path=progress_file)
         assert runner.stats_total_cost == 0.0
 
-    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.loop.invoke_claude")
     @patch("zoyd.loop.time.time")
     def test_max_cost_stops_when_exceeded(self, mock_time, mock_invoke, tmp_path, capsys):
         """Test that run stops when cost limit is exceeded."""
@@ -1913,7 +1913,7 @@ class TestMaxCost:
         assert "Cost limit exceeded" in captured.out
         assert "$1.50" in captured.out or "$1.5" in captured.out
 
-    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.loop.invoke_claude")
     @patch("zoyd.loop.time.time")
     def test_cost_accumulates_across_iterations(self, mock_time, mock_invoke, tmp_path):
         """Test that cost accumulates across iterations."""
@@ -2013,7 +2013,7 @@ class TestMaxCostCLI:
 class TestInvokeClaudeCostTracking:
     """Tests for invoke_claude cost tracking."""
 
-    @patch("zoyd.loop.subprocess.run")
+    @patch("zoyd.loop.commit_manager.subprocess.run")
     def test_invoke_claude_returns_cost_from_json(self, mock_run):
         """Test that invoke_claude extracts cost from JSON output."""
         from zoyd.loop import invoke_claude
@@ -2031,7 +2031,7 @@ class TestInvokeClaudeCostTracking:
         assert output == "Task completed successfully"
         assert cost == 0.25
 
-    @patch("zoyd.loop.subprocess.run")
+    @patch("zoyd.loop.commit_manager.subprocess.run")
     def test_invoke_claude_no_cost_when_not_tracking(self, mock_run):
         """Test that invoke_claude returns None cost when not tracking."""
         from zoyd.loop import invoke_claude
@@ -2044,7 +2044,7 @@ class TestInvokeClaudeCostTracking:
         assert output == "output"
         assert cost is None
 
-    @patch("zoyd.loop.subprocess.run")
+    @patch("zoyd.loop.commit_manager.subprocess.run")
     def test_invoke_claude_uses_json_output_format_when_tracking(self, mock_run):
         """Test that --output-format json is added when tracking cost."""
         from zoyd.loop import invoke_claude
@@ -2060,7 +2060,7 @@ class TestInvokeClaudeCostTracking:
         assert "--output-format" in cmd
         assert "json" in cmd
 
-    @patch("zoyd.loop.subprocess.run")
+    @patch("zoyd.loop.commit_manager.subprocess.run")
     def test_invoke_claude_handles_json_parse_error(self, mock_run):
         """Test that invoke_claude handles invalid JSON gracefully."""
         from zoyd.loop import invoke_claude
@@ -2074,7 +2074,7 @@ class TestInvokeClaudeCostTracking:
         assert output == "not json"
         assert cost is None
 
-    @patch("zoyd.loop.subprocess.run")
+    @patch("zoyd.loop.commit_manager.subprocess.run")
     def test_invoke_claude_handles_missing_cost_field(self, mock_run):
         """Test that invoke_claude handles JSON without cost_usd field."""
         from zoyd.loop import invoke_claude
@@ -2144,7 +2144,7 @@ class TestLoopRunnerEvents:
         assert received_events[0].data.get("status") == "complete"
         assert received_events[0].data.get("exit_code") == 0
 
-    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.loop.invoke_claude")
     def test_iteration_start_event_emitted(self, mock_invoke, tmp_path):
         """Test that ITERATION_START event is emitted at start of each iteration."""
         from zoyd.tui.events import EventType
@@ -2172,7 +2172,7 @@ class TestLoopRunnerEvents:
         assert "completed" in received_events[0].data
         assert "total" in received_events[0].data
 
-    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.loop.invoke_claude")
     def test_iteration_end_event_emitted(self, mock_invoke, tmp_path):
         """Test that ITERATION_END event is emitted at end of each iteration."""
         from zoyd.tui.events import EventType
@@ -2200,7 +2200,7 @@ class TestLoopRunnerEvents:
         assert "duration" in received_events[0].data
         assert "success" in received_events[0].data
 
-    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.loop.invoke_claude")
     def test_claude_invoke_event_emitted(self, mock_invoke, tmp_path):
         """Test that CLAUDE_INVOKE event is emitted before invoking Claude."""
         from zoyd.tui.events import EventType
@@ -2227,7 +2227,7 @@ class TestLoopRunnerEvents:
         assert received_events[0].data.get("iteration") == 1
         assert "task" in received_events[0].data
 
-    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.loop.invoke_claude")
     def test_claude_response_event_on_success(self, mock_invoke, tmp_path):
         """Test that CLAUDE_RESPONSE event is emitted on successful invocation."""
         from zoyd.tui.events import EventType
@@ -2255,7 +2255,7 @@ class TestLoopRunnerEvents:
         assert received_events[0].data.get("return_code") == 0
         assert received_events[0].data.get("cost_usd") == 0.05
 
-    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.loop.invoke_claude")
     def test_claude_error_event_on_failure(self, mock_invoke, tmp_path):
         """Test that CLAUDE_ERROR event is emitted on failed invocation."""
         from zoyd.tui.events import EventType
@@ -2283,7 +2283,7 @@ class TestLoopRunnerEvents:
         assert received_events[0].data.get("return_code") == 1
         assert "output" in received_events[0].data
 
-    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.loop.invoke_claude")
     def test_task_blocked_event_emitted(self, mock_invoke, tmp_path):
         """Test that TASK_BLOCKED event is emitted when Claude can't complete task."""
         from zoyd.tui.events import EventType
@@ -2310,7 +2310,7 @@ class TestLoopRunnerEvents:
         assert "task" in received_events[0].data
         assert "reason" in received_events[0].data
 
-    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.loop.invoke_claude")
     def test_cost_update_event_emitted(self, mock_invoke, tmp_path):
         """Test that COST_UPDATE event is emitted when cost is tracked."""
         from zoyd.tui.events import EventType
@@ -2339,7 +2339,7 @@ class TestLoopRunnerEvents:
         assert received_events[0].data.get("total_cost") == 0.05
         assert received_events[0].data.get("max_cost") == 1.0
 
-    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.loop.invoke_claude")
     def test_cost_limit_exceeded_event_emitted(self, mock_invoke, tmp_path):
         """Test that COST_LIMIT_EXCEEDED event is emitted when cost exceeds max."""
         from zoyd.tui.events import EventType
@@ -2370,7 +2370,7 @@ class TestLoopRunnerEvents:
 
     @patch("zoyd.loop.commit_changes")
     @patch("zoyd.loop.generate_commit_message")
-    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.loop.invoke_claude")
     def test_commit_events_emitted(self, mock_invoke, mock_gen_msg, mock_commit, tmp_path):
         """Test that commit events are emitted during auto-commit."""
         from zoyd.tui.events import EventType
@@ -2403,7 +2403,7 @@ class TestLoopRunnerEvents:
 
     @patch("zoyd.loop.commit_changes")
     @patch("zoyd.loop.generate_commit_message")
-    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.loop.invoke_claude")
     def test_commit_failed_event_emitted(self, mock_invoke, mock_gen_msg, mock_commit, tmp_path):
         """Test that COMMIT_FAILED event is emitted when commit fails."""
         from zoyd.tui.events import EventType
@@ -2433,7 +2433,7 @@ class TestLoopRunnerEvents:
 
     @patch("zoyd.loop.commit_changes")
     @patch("zoyd.loop.generate_commit_message")
-    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.loop.invoke_claude")
     def test_task_complete_event_on_successful_commit(self, mock_invoke, mock_gen_msg, mock_commit, tmp_path):
         """Test that TASK_COMPLETE event is emitted on successful commit."""
         from zoyd.tui.events import EventType
@@ -2486,7 +2486,7 @@ class TestLoopRunnerEvents:
         assert received_events[0].data.get("status") == "max_iterations"
         assert received_events[0].data.get("exit_code") == 1
 
-    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.loop.invoke_claude")
     def test_loop_end_event_on_fail_fast(self, mock_invoke, tmp_path):
         """Test LOOP_END event with fail_fast status."""
         from zoyd.tui.events import EventType
@@ -2514,7 +2514,7 @@ class TestLoopRunnerEvents:
         assert len(received_events) == 1
         assert received_events[0].data.get("status") == "fail_fast"
 
-    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.loop.invoke_claude")
     def test_loop_end_event_on_max_failures(self, mock_invoke, tmp_path):
         """Test LOOP_END event with max_failures status."""
         from zoyd.tui.events import EventType
@@ -2541,7 +2541,7 @@ class TestLoopRunnerEvents:
         assert len(received_events) == 1
         assert received_events[0].data.get("status") == "max_failures"
 
-    @patch("zoyd.loop.invoke_claude")
+    @patch("zoyd.loop.loop.invoke_claude")
     def test_multiple_iterations_emit_multiple_events(self, mock_invoke, tmp_path):
         """Test that multiple iterations emit events for each iteration."""
         from zoyd.tui.events import EventType
