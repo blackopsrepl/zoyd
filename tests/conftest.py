@@ -20,5 +20,5 @@ def _isolate_config():
     imported) so that it always returns a pristine ZoydConfig with
     dataclass defaults.
     """
-    with patch("zoyd.loop.load_config", return_value=ZoydConfig(session_logging=False, storage_backend="file")):
+    with patch("zoyd.loop.loop.load_config", return_value=ZoydConfig(session_logging=False, storage_backend="file")):
         yield
