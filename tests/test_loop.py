@@ -1250,7 +1250,7 @@ class TestFailFast:
             session_logging=False,
         )
         # Patch time.sleep to avoid waiting
-        with patch("zoyd.loop.time.sleep"):
+        with patch("zoyd.loop.loop.time.sleep"):
             exit_code = runner.run()
 
         assert exit_code == 2
@@ -1416,7 +1416,7 @@ class TestVerboseModeTiming:
         assert runner.start_time is not None
 
     @patch("zoyd.loop.loop.invoke_claude")
-    @patch("zoyd.loop.time.time")
+    @patch("zoyd.loop.loop.time.time")
     def test_verbose_shows_elapsed_time(self, mock_time, mock_invoke, tmp_path, capsys):
         """Test that verbose mode displays elapsed time."""
         prd_file = tmp_path / "PRD.md"
@@ -1444,7 +1444,7 @@ class TestVerboseModeTiming:
         assert "Elapsed time:" in captured.out
 
     @patch("zoyd.loop.loop.invoke_claude")
-    @patch("zoyd.loop.time.time")
+    @patch("zoyd.loop.loop.time.time")
     def test_verbose_shows_iteration_timing(self, mock_time, mock_invoke, tmp_path, capsys):
         """Test that verbose mode displays iteration timing."""
         prd_file = tmp_path / "PRD.md"
@@ -1534,7 +1534,7 @@ class TestSummaryStatistics:
         assert "Tasks completed:" in captured.out
 
     @patch("zoyd.loop.loop.invoke_claude")
-    @patch("zoyd.loop.time.time")
+    @patch("zoyd.loop.loop.time.time")
     def test_summary_shows_correct_stats(self, mock_time, mock_invoke, tmp_path, capsys):
         """Test that summary shows correct statistics after iterations."""
         prd_file = tmp_path / "PRD.md"
@@ -1563,8 +1563,8 @@ class TestSummaryStatistics:
         assert "Tasks completed: 0 (1/1 total)" in captured.out
 
     @patch("zoyd.loop.loop.invoke_claude")
-    @patch("zoyd.loop.time.time")
-    @patch("zoyd.loop.time.sleep")
+    @patch("zoyd.loop.loop.time.time")
+    @patch("zoyd.loop.loop.time.sleep")
     def test_summary_on_max_iterations(self, mock_sleep, mock_time, mock_invoke, tmp_path, capsys):
         """Test that summary is printed when max iterations reached."""
         prd_file = tmp_path / "PRD.md"
@@ -1591,8 +1591,8 @@ class TestSummaryStatistics:
         assert "Success rate: 100.0% (2/2)" in captured.out
 
     @patch("zoyd.loop.loop.invoke_claude")
-    @patch("zoyd.loop.time.time")
-    @patch("zoyd.loop.time.sleep")
+    @patch("zoyd.loop.loop.time.time")
+    @patch("zoyd.loop.loop.time.sleep")
     def test_summary_on_failure(self, mock_sleep, mock_time, mock_invoke, tmp_path, capsys):
         """Test that summary is printed on consecutive failures."""
         prd_file = tmp_path / "PRD.md"
@@ -1619,7 +1619,7 @@ class TestSummaryStatistics:
         assert "Success rate: 0.0% (0/3)" in captured.out
 
     @patch("zoyd.loop.loop.invoke_claude")
-    @patch("zoyd.loop.time.time")
+    @patch("zoyd.loop.loop.time.time")
     def test_summary_on_fail_fast(self, mock_time, mock_invoke, tmp_path, capsys):
         """Test that summary is printed on fail-fast exit."""
         prd_file = tmp_path / "PRD.md"
@@ -1885,7 +1885,7 @@ class TestMaxCost:
         assert runner.stats_total_cost == 0.0
 
     @patch("zoyd.loop.loop.invoke_claude")
-    @patch("zoyd.loop.time.time")
+    @patch("zoyd.loop.loop.time.time")
     def test_max_cost_stops_when_exceeded(self, mock_time, mock_invoke, tmp_path, capsys):
         """Test that run stops when cost limit is exceeded."""
         prd_file = tmp_path / "PRD.md"
@@ -1914,7 +1914,7 @@ class TestMaxCost:
         assert "$1.50" in captured.out or "$1.5" in captured.out
 
     @patch("zoyd.loop.loop.invoke_claude")
-    @patch("zoyd.loop.time.time")
+    @patch("zoyd.loop.loop.time.time")
     def test_cost_accumulates_across_iterations(self, mock_time, mock_invoke, tmp_path):
         """Test that cost accumulates across iterations."""
         prd_file = tmp_path / "PRD.md"
@@ -1973,7 +1973,7 @@ class TestMaxCost:
         runner.start_time = 1000.0
         runner.stats_total_cost = 0.0
 
-        with patch("zoyd.loop.time.time", return_value=1010.0):
+        with patch("zoyd.loop.loop.time.time", return_value=1010.0):
             runner.print_summary()
 
         captured = capsys.readouterr()
@@ -2368,8 +2368,8 @@ class TestLoopRunnerEvents:
         assert received_events[0].data.get("total_cost") == 0.10
         assert received_events[0].data.get("max_cost") == 0.05
 
-    @patch("zoyd.loop.commit_changes")
-    @patch("zoyd.loop.generate_commit_message")
+    @patch("zoyd.loop.loop.commit_changes")
+    @patch("zoyd.loop.loop.generate_commit_message")
     @patch("zoyd.loop.loop.invoke_claude")
     def test_commit_events_emitted(self, mock_invoke, mock_gen_msg, mock_commit, tmp_path):
         """Test that commit events are emitted during auto-commit."""
@@ -2401,8 +2401,8 @@ class TestLoopRunnerEvents:
         assert start_events[0].data.get("message") == "feat: add feature"
         assert len(success_events) == 1
 
-    @patch("zoyd.loop.commit_changes")
-    @patch("zoyd.loop.generate_commit_message")
+    @patch("zoyd.loop.loop.commit_changes")
+    @patch("zoyd.loop.loop.generate_commit_message")
     @patch("zoyd.loop.loop.invoke_claude")
     def test_commit_failed_event_emitted(self, mock_invoke, mock_gen_msg, mock_commit, tmp_path):
         """Test that COMMIT_FAILED event is emitted when commit fails."""
@@ -2431,8 +2431,8 @@ class TestLoopRunnerEvents:
         assert len(failed_events) == 1
         assert "error" in failed_events[0].data
 
-    @patch("zoyd.loop.commit_changes")
-    @patch("zoyd.loop.generate_commit_message")
+    @patch("zoyd.loop.loop.commit_changes")
+    @patch("zoyd.loop.loop.generate_commit_message")
     @patch("zoyd.loop.loop.invoke_claude")
     def test_task_complete_event_on_successful_commit(self, mock_invoke, mock_gen_msg, mock_commit, tmp_path):
         """Test that TASK_COMPLETE event is emitted on successful commit."""

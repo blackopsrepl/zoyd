@@ -10,24 +10,30 @@ import time
 import pytest
 import redis
 
+from zoyd.config import load_config
 
-HOST = "10.43.12.252"
-PORT = 6379
-PASSWORD = "REDACTED"
-DB = 14
+
 PREFIX = "inttest:"
 
 
 @pytest.fixture(scope="module")
 def r():
-    """Redis client on db 14. Skips the whole module if unreachable."""
+    """Redis client. Skips the whole module if unreachable.
+    
+    Reads Redis config (host, port, password, db) from zoyd.toml via load_config().
+    """
+    config = load_config()
     client = redis.Redis(
-        host=HOST, port=PORT, password=PASSWORD, db=DB, decode_responses=True
+        host=config.redis_host,
+        port=config.redis_port,
+        password=config.redis_password,
+        db=config.redis_db,
+        decode_responses=True,
     )
     try:
         client.ping()
     except (redis.ConnectionError, redis.TimeoutError, redis.AuthenticationError):
-        pytest.skip(f"Redis not available at {HOST}:{PORT} db {DB}")
+        pytest.skip(f"Redis not available at {config.redis_host}:{config.redis_port} db {config.redis_db}")
     return client
 
 
