@@ -46,7 +46,7 @@ class TestLoopRunnerSessionLogging:
 
     def test_session_logging_enabled_by_default(self, prd_file, progress_file, sessions_dir):
         """Test session_logging is enabled by default (config default is True)."""
-        with patch("zoyd.loop.load_config", return_value=ZoydConfig()):
+        with patch("zoyd.loop.loop.load_config", return_value=ZoydConfig()):
             runner = LoopRunner(
                 prd_path=prd_file,
                 progress_path=progress_file,
@@ -103,7 +103,7 @@ class TestSessionLoggingOnComplete:
         )
 
         # Mock invoke_claude to return success
-        with patch("zoyd.loop.invoke_claude") as mock_invoke:
+        with patch("zoyd.loop.loop.invoke_claude") as mock_invoke:
             mock_invoke.return_value = (0, "Done", 0.01)
 
             # Mock PRD updating (task completion)
@@ -136,7 +136,7 @@ class TestSessionLoggingOnComplete:
             tui_enabled=False,
         )
 
-        with patch("zoyd.loop.invoke_claude") as mock_invoke:
+        with patch("zoyd.loop.loop.invoke_claude") as mock_invoke:
             mock_invoke.return_value = (0, "Done", 0.01)
 
             with patch("zoyd.prd.read_prd") as mock_read:
@@ -178,7 +178,7 @@ class TestSessionLoggingOnMaxIterations:
             tui_enabled=False,
         )
 
-        with patch("zoyd.loop.invoke_claude") as mock_invoke:
+        with patch("zoyd.loop.loop.invoke_claude") as mock_invoke:
             mock_invoke.return_value = (0, "Working on it", 0.01)
 
             # PRD never changes (tasks stay incomplete)
@@ -221,7 +221,7 @@ class TestSessionLoggingOnFailure:
             tui_enabled=False,
         )
 
-        with patch("zoyd.loop.invoke_claude") as mock_invoke:
+        with patch("zoyd.loop.loop.invoke_claude") as mock_invoke:
             # Return failure
             mock_invoke.return_value = (1, "Error occurred", 0.0)
 
@@ -258,7 +258,7 @@ class TestSessionLoggingOnFailure:
             tui_enabled=False,
         )
 
-        with patch("zoyd.loop.invoke_claude") as mock_invoke:
+        with patch("zoyd.loop.loop.invoke_claude") as mock_invoke:
             mock_invoke.return_value = (1, "Error", 0.0)
 
             with patch("zoyd.prd.read_prd") as mock_read:
@@ -310,7 +310,7 @@ class TestSessionLoggingEvents:
         # Patch read_prd BEFORE creating LoopRunner
         # Side effect needs: call 1 (init stats), call 2 (loop start), call 3 (after invoke)
         with patch("zoyd.prd.read_prd", side_effect=[prd_incomplete, prd_incomplete, prd_complete, prd_complete]) as mock_read:
-            with patch("zoyd.loop.invoke_claude") as mock_invoke:
+            with patch("zoyd.loop.loop.invoke_claude") as mock_invoke:
                 mock_invoke.return_value = (0, "Done", 0.01)
 
                 runner = LoopRunner(
@@ -373,7 +373,7 @@ class TestSessionLoggingOutputs:
         # Need to create runner INSIDE the mock context since __init__ doesn't read PRD
         # but run() does, and we need consistent mock behavior
         with patch("zoyd.prd.read_prd", side_effect=[prd_incomplete, prd_incomplete, prd_complete, prd_complete]):
-            with patch("zoyd.loop.invoke_claude") as mock_invoke:
+            with patch("zoyd.loop.loop.invoke_claude") as mock_invoke:
                 mock_invoke.return_value = (0, "I completed the task", 0.05)
                 runner.run()
 
@@ -424,7 +424,7 @@ class TestSessionLoggingCostTracking:
 
         # Side effect needs 4 values: init stats, loop iteration 1 start, after invoke, completion check
         with patch("zoyd.prd.read_prd", side_effect=[prd_incomplete, prd_incomplete, prd_complete, prd_complete]):
-            with patch("zoyd.loop.invoke_claude") as mock_invoke:
+            with patch("zoyd.loop.loop.invoke_claude") as mock_invoke:
                 mock_invoke.return_value = (0, "Done", 0.15)
                 runner.run()
 
@@ -452,7 +452,7 @@ class TestSessionLoggingFileStructure:
             tui_enabled=False,
         )
 
-        with patch("zoyd.loop.invoke_claude") as mock_invoke:
+        with patch("zoyd.loop.loop.invoke_claude") as mock_invoke:
             mock_invoke.return_value = (0, "Done", 0.01)
 
             with patch("zoyd.prd.read_prd") as mock_read:
@@ -484,7 +484,7 @@ class TestSessionLoggingFileStructure:
             tui_enabled=False,
         )
 
-        with patch("zoyd.loop.invoke_claude") as mock_invoke:
+        with patch("zoyd.loop.loop.invoke_claude") as mock_invoke:
             mock_invoke.return_value = (0, "Done", 0.01)
 
             with patch("zoyd.prd.read_prd") as mock_read:
@@ -520,7 +520,7 @@ class TestSessionLoggingFileStructure:
             tui_enabled=False,
         )
 
-        with patch("zoyd.loop.invoke_claude") as mock_invoke:
+        with patch("zoyd.loop.loop.invoke_claude") as mock_invoke:
             mock_invoke.return_value = (0, "Done", 0.01)
 
             with patch("zoyd.prd.read_prd") as mock_read:
@@ -558,7 +558,7 @@ class TestSessionLoggingMetadata:
             tui_enabled=False,
         )
 
-        with patch("zoyd.loop.invoke_claude") as mock_invoke:
+        with patch("zoyd.loop.loop.invoke_claude") as mock_invoke:
             mock_invoke.return_value = (0, "Done", 0.01)
 
             with patch("zoyd.prd.read_prd") as mock_read:
@@ -590,7 +590,7 @@ class TestSessionLoggingMetadata:
             tui_enabled=False,
         )
 
-        with patch("zoyd.loop.invoke_claude") as mock_invoke:
+        with patch("zoyd.loop.loop.invoke_claude") as mock_invoke:
             mock_invoke.return_value = (0, "Done", 0.01)
 
             with patch("zoyd.prd.read_prd") as mock_read:
@@ -625,7 +625,7 @@ class TestSessionLoggingDisabled:
             tui_enabled=False,
         )
 
-        with patch("zoyd.loop.invoke_claude") as mock_invoke:
+        with patch("zoyd.loop.loop.invoke_claude") as mock_invoke:
             mock_invoke.return_value = (0, "Done", 0.01)
 
             with patch("zoyd.prd.read_prd") as mock_read:

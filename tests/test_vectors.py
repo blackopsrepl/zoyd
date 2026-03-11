@@ -696,7 +696,7 @@ class TestGracefulDegradationLoopIntegration:
         from unittest.mock import patch
         from zoyd.session.embedding import UnavailableProvider
 
-        with patch("zoyd.loop.get_provider", return_value=UnavailableProvider()):
+        with patch("zoyd.loop.loop.get_provider", return_value=UnavailableProvider()):
             from zoyd.loop import LoopRunner
             runner = LoopRunner(
                 prd_path=Path("test.md"),
