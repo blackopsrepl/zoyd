@@ -10,6 +10,7 @@ jobs:
   test:
     name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
@@ -36,4 +37,4 @@ jobs:
           fi
 
       - name: Test
-        run: pytest tests/ -v --tb=short -x --ignore=tests/test_redis_integration.py --ignore=tests/test_vectors_integration.py --ignore=tests/test_session_integration.py
+        run: pytest tests/ -v --tb=short -x --timeout=30 --ignore=tests/test_redis_integration.py --ignore=tests/test_vectors_integration.py --ignore=tests/test_session_integration.py
