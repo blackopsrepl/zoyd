@@ -75,6 +75,7 @@ help:
 	@echo ""
 	@echo -e "  $(VIOLET)CI$(RESET)"
 	@echo -e "    $(CYAN)make ci-local$(RESET)        Simulate CI pipeline locally"
+	@echo -e "    $(CYAN)make pre-release$(RESET)     Full global project check before releasing"
 	@echo ""
 	@echo -e "  $(VIOLET)Version & Release$(RESET)"
 	@echo -e "    $(CYAN)make version$(RESET)         Show current version"
@@ -194,6 +195,44 @@ check: lint
 ci-local: clean venv dev lint test
 	@echo -e "$(PURPLE)$(BOLD)════════════════════════════════════════$(RESET)"
 	@echo -e "$(CYAN)✓ CI pipeline simulation complete$(RESET)"
+	@echo -e "$(PURPLE)$(BOLD)════════════════════════════════════════$(RESET)"
+
+# Full pre-release check: installs globally via pipx, runs lint + unit tests,
+# verifies the CLI works end-to-end, and prints the release version.
+.PHONY: pre-release
+pre-release: clean dev
+	@echo -e "$(PURPLE)$(BOLD)════════════════════════════════════════$(RESET)"
+	@echo -e "$(VIOLET)$(BOLD)  PRE-RELEASE CHECK$(RESET)"
+	@echo -e "$(PURPLE)$(BOLD)════════════════════════════════════════$(RESET)"
+	@echo ""
+	@echo -e "$(PURPLE)$(BOLD)[1/5] Lint...$(RESET)"
+	@$(MAKE) --no-print-directory lint
+	@echo ""
+	@echo -e "$(PURPLE)$(BOLD)[2/5] Unit tests (excluding integration)...$(RESET)"
+	@$(PYTEST) tests/ -v --tb=short -x \
+		--ignore=tests/test_redis_integration.py \
+		--ignore=tests/test_vectors_integration.py \
+		--ignore=tests/test_session_integration.py
+	@echo ""
+	@echo -e "$(PURPLE)$(BOLD)[3/5] Installing globally via pipx...$(RESET)"
+	@if ! command -v pipx &> /dev/null; then \
+		echo -e "$(RED)Error: pipx not found. Install with: pip install pipx$(RESET)"; \
+		exit 1; \
+	fi
+	@pipx install -e . --force --quiet
+	@echo -e "$(CYAN)  ✓ pipx install complete$(RESET)"
+	@echo ""
+	@echo -e "$(PURPLE)$(BOLD)[4/5] Smoke-testing global CLI...$(RESET)"
+	@zoyd --version
+	@zoyd --help > /dev/null
+	@echo -e "$(CYAN)  ✓ CLI works$(RESET)"
+	@echo ""
+	@echo -e "$(PURPLE)$(BOLD)[5/5] Version check...$(RESET)"
+	@VERSION=$$(grep -Po '(?<=version = ")[^"]+' pyproject.toml); \
+	echo -e "$(CYAN)  Ready to release: $(BOLD)$$VERSION$(RESET)"
+	@echo ""
+	@echo -e "$(PURPLE)$(BOLD)════════════════════════════════════════$(RESET)"
+	@echo -e "$(CYAN)✓ Pre-release checks passed$(RESET)"
 	@echo -e "$(PURPLE)$(BOLD)════════════════════════════════════════$(RESET)"
 
 # ═══════════════════════════════════════════════════════════════════════════════
