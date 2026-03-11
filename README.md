@@ -4,6 +4,12 @@ Minimal autonomous agent loop for Claude Code.
 
 Zoyd repeatedly invokes Claude Code against a PRD file, tracking progress across iterations. Each iteration gets fresh context, and tasks are marked complete when their checkbox is checked (`[x]`).
 
+## Screenshots
+
+![Zoyd TUI Banner](docs/screenshots/tui-banner.png)
+
+![Zoyd Task Progress](docs/screenshots/tui-progress.png)
+
 ## Installation
 
 ```bash
