@@ -64,6 +64,9 @@ zoyd run --max-cost 5.00
 
 # Verbose output
 zoyd run -v
+
+# Disable sandbox (allows unrestricted bash)
+zoyd run --rabid
 ```
 
 ### Check status
@@ -76,7 +79,7 @@ zoyd status --json       # Machine-readable output
 
 ## Configuration
 
-Zoyd can be configured via a `zoyd.toml` file in your project directory. CLI options override config values.
+Zoyd can be configured via a `zoyd.toml` file in your project directory (or any parent directory). CLI options override config values.
 
 ```toml
 # zoyd.toml
@@ -96,8 +99,20 @@ tui_refresh_rate = 4.0
 tui_compact = false
 
 # Session logging
-session_logging = false
+session_logging = true
 sessions_dir = ".zoyd/sessions"
+storage_backend = "redis"   # "file" or "redis"
+
+# Redis connection (used when storage_backend = "redis")
+redis_host = "localhost"
+redis_port = 6379
+redis_db = 0
+# redis_password = ""
+
+# Vector semantic memory (requires optional extras)
+vector_memory = false
+vector_top_k = 5
+vector_recent_n = 3
 ```
 
 Config can also be nested under a `[zoyd]` section if needed.
@@ -154,8 +169,16 @@ Additional context for Claude goes here.
 | `--fail-fast` | Exit on first failure | disabled |
 | `--max-cost USD` | Cost limit before stopping | none |
 | `--no-tui` | Disable Rich TUI | disabled |
-| `--session-log/--no-session-log` | Enable session logging | disabled |
+| `--session-log/--no-session-log` | Enable session logging | enabled |
 | `--sessions-dir PATH` | Session log directory | `.zoyd/sessions` |
+| `--storage-backend BACKEND` | Storage backend: `file` or `redis` | `redis` |
+| `--redis-host HOST` | Redis hostname | `localhost` |
+| `--redis-port PORT` | Redis port | `6379` |
+| `--redis-db N` | Redis database number | `0` |
+| `--redis-password PASS` | Redis password | none |
+| `--vector-memory/--no-vector-memory` | Enable semantic vector memory | disabled |
+| `--vector-top-k N` | Results to retrieve from vector memory | `5` |
+| `--rabid` | Disable sandbox (unrestricted bash) | disabled |
 | `--dry-run` | Show prompts without running | disabled |
 | `-v, --verbose` | Verbose output | disabled |
 
